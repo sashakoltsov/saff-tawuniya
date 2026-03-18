@@ -185,8 +185,8 @@
           setBridgeGap(Math.floor(Math.random() * 641) + 160); 
           const pH = Math.floor(Math.random() * 401); 
           setPillHeight(pH);
-          const thickMax = Math.min(50, Math.max(4, pH - 1)); 
-          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+          const thickMax = Math.min(7, Math.max(1, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * thickMax) + 1); 
           setPillLength(Math.floor(Math.random() * 601) + 400); 
         } else if (mode === 'loop') {
           setLoopCount(Math.floor(Math.random() * 8) + 3);
@@ -195,8 +195,8 @@
           setLoopFillRatio(Math.random() * 0.70 + 0.20); 
           const pH = Math.floor(Math.random() * 201); 
           setPillHeight(pH);
-          const thickMax = Math.min(50, Math.max(4, pH - 1)); 
-          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+          const thickMax = Math.min(7, Math.max(1, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * thickMax) + 1); 
         }
 
         setInclineRatio(newIncline);

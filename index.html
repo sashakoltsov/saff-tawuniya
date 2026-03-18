@@ -1,0 +1,822 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>The Life Line - Tawuniya Graphic Language</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Commissioner:wght@250;300;350;400;600;700&display=swap" rel="stylesheet">
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM (Production UMDS) -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+  
+  <!-- Babel for in-browser JSX compilation -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <style>
+    body { font-family: 'Commissioner', sans-serif; margin: 0; overflow: hidden; }
+    /* Hide scrollbar for cleaner UI */
+    .hide-scrollbar::-webkit-scrollbar { display: none; }
+    .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script type="text/babel">
+    const { useState } = React;
+
+    // --- Inlined SVG Icons (Replacing lucide-react) ---
+    const IconPaths = {
+      Download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></>,
+      Copy: <><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>,
+      Type: <><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></>,
+      Shapes: <><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></>,
+      BoxSelect: <><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></>,
+      Layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></>,
+      Route: <><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></>,
+      Repeat: <><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></>,
+      Palette: <><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.836-.437-1.124-.294-.312-.359-.765-.114-1.169.254-.409.696-.619 1.139-.619h1.5C18.536 17.4 22 13.9 22 12c0-5.5-4.5-10-10-10z"/></>,
+      Plus: <><path d="M5 12h14"/><path d="M12 5v14"/></>,
+      ChevronDown: <><path d="m6 9 6 6 6-6"/></>,
+      ChevronRight: <><path d="m9 18 6-6-6-6"/></>,
+      Shuffle: <><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></>,
+      Activity: <><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></>
+    };
+
+    const Icon = ({ name, size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+        {IconPaths[name]}
+      </svg>
+    );
+
+    // --- Application Components ---
+    const PolygonIcon = ({ n, active, onClick }) => {
+      const pts = [];
+      for(let i=0; i<n; i++) {
+        let a = i * 2 * Math.PI / n - Math.PI/2;
+        pts.push(`${12 + 8*Math.cos(a)},${12 + 8*Math.sin(a)}`);
+      }
+      return (
+        <button 
+          onClick={onClick} 
+          className={`p-2 rounded border transition-all flex flex-col items-center justify-center gap-1.5 ${active ? 'bg-indigo-50 border-indigo-400 text-indigo-700 shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'}`}
+        >
+          <svg width="20" height="20" viewBox="0 0 24 24">
+            <polygon points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
+          </svg>
+          <span className="text-[10px] font-bold leading-none">{n} Sides</span>
+        </button>
+      );
+    };
+
+    const ColorSwatch = ({ color, selected, disabled, onClick }) => (
+      <button
+        onClick={() => !disabled && onClick(color)}
+        className={`w-8 h-8 rounded-full border-2 transition-all shrink-0 ${selected ? 'border-white outline outline-2 outline-indigo-400 scale-110 shadow-md' : disabled ? 'border-transparent opacity-20 cursor-not-allowed' : 'border-transparent hover:scale-110 shadow-sm'}`}
+        style={{ backgroundColor: color }}
+        title={color}
+      />
+    );
+
+    const CustomColorPicker = ({ color, disabled, onChange }) => (
+      <div className={`relative w-8 h-8 rounded-full overflow-hidden border-2 transition-all shrink-0 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:scale-110 shadow-sm border-neutral-200'}`} title="Custom Color">
+        <div className="absolute inset-0 bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)] rounded-full pointer-events-none flex items-center justify-center">
+          <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm">
+            <Icon name="Plus" size={12} className="text-neutral-600" />
+          </div>
+        </div>
+        <input 
+          type="color" 
+          value={color} 
+          onChange={(e) => !disabled && onChange(e.target.value)} 
+          className="absolute -inset-4 w-16 h-16 opacity-0 cursor-pointer"
+          disabled={disabled}
+        />
+      </div>
+    );
+
+    const App = () => {
+      // Main Logic Parameters
+      const [layoutMode, setLayoutMode] = useState('line'); 
+      const [lineCount, setLineCount] = useState(3);
+      const [loopCount, setLoopCount] = useState(6);
+      const [inclineRatio, setInclineRatio] = useState(0.20); 
+      const [roundingRatio, setRoundingRatio] = useState(1.0); 
+      const [rotation, setRotation] = useState(0); 
+
+      // Dimensions
+      const [pillLength, setPillLength] = useState(450);
+      const [bridgeGap, setBridgeGap] = useState(180); 
+      const [pillHeight, setPillHeight] = useState(160);
+      const [bridgeThickness, setBridgeThickness] = useState(4);
+      const [loopFillRatio, setLoopFillRatio] = useState(0.65); 
+
+      // Variation Arrays 
+      const [vHeights, setVHeights] = useState(Array(10).fill(1));
+      const [vLengths, setVLengths] = useState(Array(10).fill(1));
+      const [vGaps, setVGaps] = useState(Array(10).fill(1));
+      const [vInclines, setVInclines] = useState(Array(10).fill(0.20));
+      const [activeVarTab, setActiveVarTab] = useState('height');
+
+      // Colors
+      const palette = ['#7E40FF', '#3E2568', '#010101', '#A270FF', '#D9D2F6'];
+      const [bgColor, setBgColor] = useState('#D9D2F6');
+      const [shapeSolidColor, setShapeSolidColor] = useState('#3E2568');
+
+      // UI State
+      const [showCode, setShowCode] = useState(false);
+      const [copyStatus, setCopyStatus] = useState('');
+      
+      // Collapsible Sections 
+      const [coreOpen, setCoreOpen] = useState(false);
+      const [dimenOpen, setDimenOpen] = useState(false);
+      const [varOpen, setVarOpen] = useState(false);
+      const [colorsOpen, setColorsOpen] = useState(false);
+
+      const shapeCount = layoutMode === 'line' ? lineCount : loopCount;
+      const headerColor = shapeSolidColor;
+
+      const handleLayoutMode = (mode) => {
+        setLayoutMode(mode);
+        if (mode === 'line') {
+          setPillLength(Math.max(40, pillLength));
+          setPillHeight(Math.max(10, pillHeight));
+        }
+      };
+
+      const handleGlobalIncline = (val) => {
+        setInclineRatio(val);
+        setVInclines(Array(10).fill(val));
+      };
+
+      const applyVarPreset = (type, setter, min, max, base) => {
+        const newArr = Array(10).fill(base);
+        for(let i=0; i<shapeCount; i++) {
+          if (type === 'gradual') {
+            newArr[i] = shapeCount > 1 ? min + (max - min) * (i / (shapeCount - 1)) : max;
+          } else if (type === 'wave') {
+            newArr[i] = i % 2 === 0 ? max : min;
+          } else if (type === 'random') {
+            newArr[i] = min + Math.random() * (max - min);
+          } else if (type === 'reset') {
+            newArr[i] = base;
+          }
+        }
+        setter(newArr);
+      };
+
+      const handleRandomise = () => {
+        const mode = Math.random() > 0.5 ? 'line' : 'loop';
+        setLayoutMode(mode);
+
+        let newIncline = 0.20;
+        if (mode === 'line') {
+          setLineCount(Math.floor(Math.random() * 8) + 1);
+          newIncline = Math.random() * 0.70 + 0.10; 
+          setRoundingRatio(Math.random() * 0.20 + 0.80); 
+          setBridgeGap(Math.floor(Math.random() * 641) + 160); 
+          const pH = Math.floor(Math.random() * 401); 
+          setPillHeight(pH);
+          const thickMax = Math.min(50, Math.max(4, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+          setPillLength(Math.floor(Math.random() * 601) + 400); 
+        } else if (mode === 'loop') {
+          setLoopCount(Math.floor(Math.random() * 8) + 3);
+          newIncline = Math.random() * 0.50 + 0.30; 
+          setRoundingRatio(Math.random() * 0.40 + 0.60); 
+          setLoopFillRatio(Math.random() * 0.70 + 0.20); 
+          const pH = Math.floor(Math.random() * 201); 
+          setPillHeight(pH);
+          const thickMax = Math.min(50, Math.max(4, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+        }
+
+        setInclineRatio(newIncline);
+        setRotation(Math.floor(Math.random() * 8) * 45); 
+
+        setVHeights(Array(10).fill(1));
+        setVLengths(Array(10).fill(1));
+        setVGaps(Array(10).fill(1));
+        setVInclines(Array(10).fill(newIncline));
+
+        const rBg = palette[Math.floor(Math.random() * palette.length)];
+        setBgColor(rBg);
+        const filteredPalette = palette.filter(c => c !== rBg);
+        setShapeSolidColor(filteredPalette[Math.floor(Math.random() * filteredPalette.length)]);
+      };
+
+      const handleRandomiseVariations = () => {
+        const presets = ['gradual', 'wave', 'random', 'reset'];
+        const getPreset = () => presets[Math.floor(Math.random() * presets.length)];
+        
+        applyVarPreset(getPreset(), setVHeights, 0.3, 2.0, 1);
+        applyVarPreset(getPreset(), setVLengths, 0.3, 2.0, 1);
+        applyVarPreset(getPreset(), setVInclines, 0.0, 1.0, inclineRatio);
+        applyVarPreset(getPreset(), setVGaps, 0.3, 2.0, 1);
+      };
+
+      const isColorDisabled = (color, target) => {
+        if (target === 'bg') return color === shapeSolidColor;
+        if (target === 'shapeSolid') return color === bgColor;
+        return false;
+      };
+
+      const rotatePoints = (pts, deg) => {
+        if (!deg) return pts;
+        const rad = (deg * Math.PI) / 180;
+        const cos = Math.cos(rad);
+        const sin = Math.sin(rad);
+        return pts.map(p => ({ ...p, x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
+      };
+
+      const cleanPoly = (pts) => {
+        let clean = [];
+        for (let i = 0; i < pts.length; i++) {
+          let p = pts[i];
+          if (clean.length === 0) { clean.push(p); continue; }
+          let prev = clean[clean.length - 1];
+          if (Math.hypot(p.x - prev.x, p.y - prev.y) > 0.1) {
+            clean.push(p);
+          } else {
+            if (p.isBridgeCorner) prev.isBridgeCorner = true;
+          }
+        }
+        if (clean.length > 1 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 0.1) {
+          if (clean[clean.length - 1].isBridgeCorner) clean[0].isBridgeCorner = true;
+          clean.pop();
+        }
+        let finalClean = [];
+        for (let i = 0; i < clean.length; i++) {
+          let prev = clean[(i - 1 + clean.length) % clean.length];
+          let curr = clean[i];
+          let next = clean[(i + 1) % clean.length];
+          let dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
+          let dx2 = next.x - curr.x, dy2 = next.y - curr.y;
+          let cross = dx1 * dy2 - dy1 * dx2;
+          let dot = dx1 * dx2 + dy1 * dy2;
+          if (Math.abs(cross) < 0.1 && dot > 0) continue; 
+          finalClean.push(curr);
+        }
+        return finalClean.length >= 3 ? finalClean : clean;
+      };
+
+      const roundPolygon = (pts, ratio, lineModeBridgeCap) => {
+        if (ratio <= 0.001) return "M " + pts.map(p => `${p.x},${p.y}`).join(" L ") + " Z";
+        
+        const n = pts.length;
+        const edges = [];
+        for (let i = 0; i < n; i++) {
+          let dx = pts[(i+1)%n].x - pts[i].x;
+          let dy = pts[(i+1)%n].y - pts[i].y;
+          edges.push({ dx, dy, len: Math.hypot(dx, dy) });
+        }
+        
+        let d = "";
+        for (let i = 0; i < n; i++) {
+          let p = pts[i];
+          let prevEdge = edges[(i-1+n)%n];
+          let nextEdge = edges[i];
+          let v1 = { x: -prevEdge.dx, y: -prevEdge.dy }; 
+          let v2 = { x: nextEdge.dx, y: nextEdge.dy };
+          let T_max = Math.min(prevEdge.len, nextEdge.len) / 2.0;
+          
+          if (lineModeBridgeCap !== undefined && p.isBridgeCorner) {
+            T_max = Math.min(T_max, lineModeBridgeCap.maxT);
+          }
+          
+          let T = T_max * ratio;
+          if (T < 0.1) {
+            d += `${i === 0 ? 'M' : 'L'} ${p.x},${p.y} `;
+            continue;
+          }
+          
+          let dot = v1.x * v2.x + v1.y * v2.y;
+          let cross = v1.x * v2.y - v1.y * v2.x;
+          let alpha = Math.atan2(Math.abs(cross), dot);
+          let phi = Math.PI - alpha;
+          let circle_kappa = Math.abs(phi) < 0.0001 ? 2.0/3.0 : (4.0/3.0) * Math.tan(phi/4.0) / Math.tan(phi/2.0);
+          circle_kappa = Math.max(0, Math.min(circle_kappa, 1.0)); 
+          
+          let t1 = { x: p.x + (v1.x / prevEdge.len) * T, y: p.y + (v1.y / prevEdge.len) * T };
+          let t2 = { x: p.x + (v2.x / nextEdge.len) * T, y: p.y + (v2.y / nextEdge.len) * T };
+          let c1 = { x: t1.x + (p.x - t1.x) * circle_kappa, y: t1.y + (p.y - t1.y) * circle_kappa };
+          let c2 = { x: t2.x + (p.x - t2.x) * circle_kappa, y: t2.y + (p.y - t2.y) * circle_kappa };
+          
+          d += `${i === 0 ? 'M' : 'L'} ${t1.x},${t1.y} `;
+          d += `C ${c1.x},${c1.y} ${c2.x},${c2.y} ${t2.x},${t2.y} `;
+        }
+        return d + "Z";
+      };
+
+      let pathData = "";
+      let viewBox = "";
+
+      const h = Math.max(0, bridgeThickness / 2.0);
+      let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+      let padX = 40, padY = 40;
+
+      if (layoutMode === 'line') {
+        const N = Math.max(1, shapeCount);
+        
+        let W = [], H_arr = [], I_arr = [], BL = [];
+        for (let i = 0; i < N; i++) {
+          W.push(pillLength * vLengths[i]);
+          H_arr.push((pillHeight / 2.0) * vHeights[i]);
+          I_arr.push(vInclines[i] * (W[i] / 2));
+          BL.push(bridgeGap * vGaps[i]);
+        }
+
+        let cx = [];
+        let curr_x = 0;
+        for (let i = 0; i < N; i++) {
+          if (i === 0) cx.push(0);
+          else {
+            curr_x += W[i - 1] / 2 + BL[i] + W[i] / 2;
+            cx.push(curr_x);
+          }
+        }
+
+        const stickOut = W[0] / 9.0; 
+        const HUGE_EXT = 8000; 
+        
+        let core_top_pts = [], render_top_pts = [];
+        core_top_pts.push({x: cx[0] - W[0]/2 - stickOut, y: -h, isBridgeCorner: true});
+        render_top_pts.push({x: cx[0] - W[0]/2 - HUGE_EXT, y: -h, isBridgeCorner: true});
+        
+        for (let i = 0; i < N; i++) {
+          let w = W[i];
+          let ht = Math.max(h + 0.1, H_arr[i]);
+          let inc = I_arr[i];
+          let center = cx[i];
+
+          let p1 = {x: center - w/2 + inc * (h/ht), y: -h, isBridgeCorner: true};
+          let p_peak = {x: center, y: -ht};
+          let p_flat1 = {x: center - w/2 + inc, y: -ht};
+          let p_flat2 = {x: center + w/2 - inc, y: -ht};
+          let p2 = {x: center + w/2 - inc * (h/ht), y: -h, isBridgeCorner: true};
+          
+          core_top_pts.push(p1); render_top_pts.push(p1);
+          if (inc >= w/2 - 0.1) {
+            core_top_pts.push(p_peak); render_top_pts.push(p_peak);
+          } else {
+            core_top_pts.push(p_flat1, p_flat2); render_top_pts.push(p_flat1, p_flat2);
+          }
+          core_top_pts.push(p2); render_top_pts.push(p2);
+        }
+        
+        core_top_pts.push({x: cx[N-1] + W[N-1]/2 + stickOut, y: -h, isBridgeCorner: true});
+        render_top_pts.push({x: cx[N-1] + W[N-1]/2 + HUGE_EXT, y: -h, isBridgeCorner: true});
+        
+        let core_bot_pts = core_top_pts.map(p => ({...p, y: -p.y})).reverse();
+        let render_bot_pts = render_top_pts.map(p => ({...p, y: -p.y})).reverse();
+        let core_raw = [...core_top_pts, ...core_bot_pts.filter(p => Math.abs(p.y) > 0.001)];
+        let render_raw = [...render_top_pts, ...render_bot_pts.filter(p => Math.abs(p.y) > 0.001)];
+        
+        const rotated_core = rotatePoints(core_raw, rotation);
+        const rotated_render = rotatePoints(render_raw, rotation);
+        pathData = roundPolygon(cleanPoly(rotated_render), roundingRatio, { h: h, maxT: bridgeGap / 2.0 });
+
+        rotated_core.forEach(p => {
+           minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+           minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+
+        if (rotation % 180 === 0) padX = 0; 
+        else if (rotation % 180 === 90) padY = 0;
+
+      } else if (layoutMode === 'loop') {
+        const N = Math.max(3, shapeCount);
+        const A = 300; 
+        const S_out = 2 * (A + h) * Math.tan(Math.PI / N);
+        const S_in  = 2 * (A - h) * Math.tan(Math.PI / N);
+        const S = 2 * A * Math.tan(Math.PI / N); 
+        const W_base = S * loopFillRatio; 
+
+        let outer_pts = [], inner_pts = [];
+
+        for (let i = 0; i < N; i++) {
+          let theta = i * (2 * Math.PI / N);
+          let cos = Math.cos(theta), sin = Math.sin(theta);
+          
+          let w_i = Math.min(S * 0.95, W_base * vLengths[i]);
+          let ht = Math.max(h + 0.1, (pillHeight / 2.0) * vHeights[i]);
+          let inc_i = vInclines[i] * (w_i / 2);
+          
+          let maxOffset = (S - w_i) / 2.0 - 0.1;
+          let offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[i] - 1) * (S/4)));
+
+          let anchor_x_top_left = Math.max(-S_out/2, offset_i - w_i/2 + inc_i * (h/ht));
+          let anchor_x_top_right = Math.min(S_out/2, offset_i + w_i/2 - inc_i * (h/ht));
+          let anchor_x_bot_left = Math.max(-S_in/2, offset_i - w_i/2 + inc_i * (h/ht));
+          let anchor_x_bot_right = Math.min(S_in/2, offset_i + w_i/2 - inc_i * (h/ht));
+
+          let seg_top = [{x: -S_out/2, y: -A - h, isBridgeCorner: true}, {x: anchor_x_top_left, y: -A - h, isBridgeCorner: true}];
+          if (inc_i >= w_i/2 - 0.1) seg_top.push({x: offset_i, y: -A - ht});
+          else seg_top.push({x: offset_i - w_i/2 + inc_i, y: -A - ht}, {x: offset_i + w_i/2 - inc_i, y: -A - ht});
+          seg_top.push({x: anchor_x_top_right, y: -A - h, isBridgeCorner: true}, {x: S_out/2, y: -A - h, isBridgeCorner: true});
+
+          let seg_bot = [{x: -S_in/2, y: -A + h, isBridgeCorner: true}, {x: anchor_x_bot_left, y: -A + h, isBridgeCorner: true}];
+          if (inc_i >= w_i/2 - 0.1) seg_bot.push({x: offset_i, y: -A + ht});
+          else seg_bot.push({x: offset_i - w_i/2 + inc_i, y: -A + ht}, {x: offset_i + w_i/2 - inc_i, y: -A + ht});
+          seg_bot.push({x: anchor_x_bot_right, y: -A + h, isBridgeCorner: true}, {x: S_in/2, y: -A + h, isBridgeCorner: true});
+
+          for (let p of seg_top) outer_pts.push({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos, isBridgeCorner: p.isBridgeCorner });
+          for (let p of seg_bot) inner_pts.push({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos, isBridgeCorner: p.isBridgeCorner });
+        }
+
+        outer_pts = rotatePoints(outer_pts, rotation);
+        inner_pts = rotatePoints(inner_pts, rotation);
+        const cleanOuter = cleanPoly(outer_pts);
+        const cleanInner = cleanPoly(inner_pts).reverse(); 
+
+        pathData = `${roundPolygon(cleanOuter, roundingRatio)} ${roundPolygon(cleanInner, roundingRatio)}`;
+        outer_pts.forEach(p => {
+           minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+           minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+        });
+      }
+
+      const contentW = maxX - minX + 2 * padX;
+      const contentH = maxY - minY + 2 * padY;
+      const squareSize = Math.max(contentW, contentH, 100);
+      const cx = minX - padX + contentW / 2;
+      const cy = minY - padY + contentH / 2;
+      const squareMinX = cx - squareSize / 2;
+      const squareMinY = cy - squareSize / 2;
+      viewBox = `${squareMinX} ${squareMinY} ${squareSize} ${squareSize}`;
+
+      const vParts = viewBox.split(' ').map(Number);
+      const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">
+      <rect x="-100000" y="-100000" width="200000" height="200000" fill="${bgColor}" />
+      <path d="${pathData}" fill="${shapeSolidColor}" fill-rule="evenodd" />
+    </svg>`;
+
+      const copyToClipboard = (text) => {
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        textArea.style.position = "fixed";
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+          document.execCommand('copy');
+          setCopyStatus('Copied!');
+          setTimeout(() => setCopyStatus(''), 2000);
+        } catch (err) {
+          setCopyStatus('Failed to copy');
+        }
+        document.body.removeChild(textArea);
+      };
+
+      const handleDownload = () => {
+        const blob = new Blob([svgMarkup], { type: 'image/svg+xml' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'tawuniya-graphic-language.svg';
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+      };
+
+      const renderVarSliders = (title, arr, setter, min, max, step, formatFn, propType) => (
+        <div className="space-y-3 mt-3 bg-neutral-50/50 p-3 rounded-lg border border-neutral-200">
+          <div className="flex gap-1 mb-2">
+            <button onClick={()=>applyVarPreset('gradual', setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Gradual</button>
+            <button onClick={()=>applyVarPreset('wave', setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Wave</button>
+            <button onClick={()=>applyVarPreset('random', setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Random</button>
+            <button onClick={()=>applyVarPreset('reset', setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1 text-[9px] uppercase font-bold tracking-wider bg-neutral-800 text-white rounded hover:bg-neutral-700 border border-neutral-800">Reset</button>
+          </div>
+          {Array(shapeCount).fill(0).map((_, i) => (
+            <div key={i} className="flex items-center gap-2">
+              <span className="text-[10px] font-mono font-bold text-neutral-400 w-4">{i+1}</span>
+              <input 
+                type="range" min={min} max={max} step={step} value={arr[i]} 
+                onChange={(e) => {
+                  let n = [...arr]; n[i] = parseFloat(e.target.value); setter(n);
+                }} 
+                className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
+              />
+              <span className="text-[10px] font-mono font-bold text-indigo-600 w-8 text-right">{formatFn(arr[i])}</span>
+            </div>
+          ))}
+        </div>
+      );
+
+      return (
+        <div className="min-h-screen text-neutral-900 flex flex-col md:flex-row selection:bg-indigo-200" style={{ backgroundColor: bgColor, fontWeight: 350 }}>
+          
+          {/* LEFT PANEL: Controls */}
+          <div className="w-full md:w-[380px] bg-white border-r border-neutral-200 shadow-xl z-20 flex flex-col shrink-0 h-screen">
+            
+            <div className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
+
+              {/* Core Shape Logic */}
+              <div>
+                <button onClick={() => setCoreOpen(!coreOpen)} className="w-full flex items-center justify-between group py-2">
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                    <Icon name="Layers" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Core Logic
+                  </h3>
+                  {coreOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
+                </button>
+                
+                {coreOpen && (
+                  <div className="mt-4 space-y-6">
+                    <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200">
+                      <button onClick={() => handleLayoutMode('line')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'line' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                        <Icon name="Route" size={14} /> Line
+                      </button>
+                      <button onClick={() => handleLayoutMode('loop')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'loop' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
+                        <Icon name="Repeat" size={14} /> Loop
+                      </button>
+                    </div>
+
+                    {layoutMode === 'line' ? (
+                      <div>
+                        <div className="flex justify-between items-end mb-2">
+                          <label className="text-xs font-semibold text-neutral-700">Amount of Shapes</label>
+                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{lineCount}</span>
+                        </div>
+                        <input type="range" min="1" max="8" step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-xs font-semibold text-neutral-700 block mb-3">Polygon Structure</label>
+                        <div className="grid grid-cols-4 gap-2">
+                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => (
+                            <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => setLoopCount(n)} />
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <label className="text-xs font-semibold text-neutral-700">Shape Rotation</label>
+                          <p className="text-[10px] text-neutral-500">45° increments</p>
+                        </div>
+                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{rotation}°</span>
+                      </div>
+                      <input type="range" min="0" max="315" step="45" value={rotation} onChange={(e) => setRotation(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <label className="text-xs font-semibold text-neutral-700">Shape Incline (Edges)</label>
+                          <p className="text-[10px] text-neutral-500">0% Rectangles → 100% Diamonds</p>
+                        </div>
+                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(inclineRatio * 100)}%</span>
+                      </div>
+                      <input 
+                        type="range" min="0" max="1" step="0.01" value={inclineRatio} 
+                        onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} 
+                        className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
+                      />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <label className="text-xs font-semibold text-neutral-700">Corner Rounding</label>
+                          <p className="text-[10px] text-neutral-500">0% Sharp → 100% Fully Round</p>
+                        </div>
+                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(roundingRatio * 100)}%</span>
+                      </div>
+                      <input type="range" min="0" max="1" step="0.01" value={roundingRatio} onChange={(e) => setRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                    </div>
+
+                    <div className="grid grid-cols-3 gap-2 pt-2">
+                      <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
+                      <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
+                      <button onClick={() => { handleGlobalIncline(1); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-neutral-200 w-full" />
+
+              {/* Base Dimensions */}
+              <div>
+                <button onClick={() => setDimenOpen(!dimenOpen)} className="w-full flex items-center justify-between group py-2">
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                    <Icon name="BoxSelect" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Base Dimensions
+                  </h3>
+                  {dimenOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
+                </button>
+                
+                {dimenOpen && (
+                  <div className="mt-4 space-y-4">
+                    {layoutMode === 'line' ? (
+                      <>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <label className="text-xs font-medium text-neutral-600">Base Pill Length</label>
+                            <span className="text-xs text-neutral-400 font-mono">{pillLength}</span>
+                          </div>
+                          <input type="range" min="40" max="1000" step="1" value={pillLength} onChange={(e) => setPillLength(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <label className="text-xs font-medium text-neutral-600">Base Bridge Gap</label>
+                            <span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span>
+                          </div>
+                          <input type="range" min="0" max="800" step="1" value={bridgeGap} onChange={(e) => setBridgeGap(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <div>
+                          <div className="flex justify-between mb-1">
+                            <label className="text-xs font-medium text-neutral-600">Pill Fill Amount</label>
+                            <span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span>
+                          </div>
+                          <input type="range" min="0.05" max="0.95" step="0.01" value={loopFillRatio} onChange={(e) => setLoopFillRatio(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                        </div>
+                      </>
+                    )}
+
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-neutral-600">Base Pill Height</label>
+                        <span className="text-xs text-neutral-400 font-mono">{pillHeight}</span>
+                      </div>
+                      <input type="range" min="0" max="400" step="1" value={pillHeight} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between mb-1">
+                        <label className="text-xs font-medium text-neutral-600">Bridge Thickness</label>
+                        <span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span>
+                      </div>
+                      <input type="range" min="1" max={Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-neutral-200 w-full" />
+
+              {/* Variations Section */}
+              <div>
+                <button onClick={() => setVarOpen(!varOpen)} className="w-full flex items-center justify-between group py-2">
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                    <Icon name="Activity" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Variations
+                  </h3>
+                  {varOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
+                </button>
+                
+                {varOpen && (
+                  <div className="mt-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <label className="text-xs font-semibold text-neutral-700">Property Select</label>
+                      <button onClick={handleRandomiseVariations} className="text-[10px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors">
+                        <Icon name="Shuffle" size={12} /> Random Presets
+                      </button>
+                    </div>
+                    <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 overflow-x-auto hide-scrollbar">
+                      <button onClick={()=>setActiveVarTab('height')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'height' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Height</button>
+                      <button onClick={()=>setActiveVarTab('length')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'length' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Length</button>
+                      <button onClick={()=>setActiveVarTab('incline')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'incline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Incline</button>
+                      <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Left Gap</button>
+                    </div>
+
+                    {activeVarTab === 'height' && renderVarSliders('Height', vHeights, setVHeights, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'height')}
+                    {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length')}
+                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 1.0, 0.01, v => `${Math.round(v*100)}%`, 'incline')}
+                    {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap')}
+                  </div>
+                )}
+              </div>
+
+              <div className="h-px bg-neutral-200 w-full" />
+
+              {/* Colors Section */}
+              <div>
+                <button onClick={() => setColorsOpen(!colorsOpen)} className="w-full flex items-center justify-between group py-2">
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
+                    <Icon name="Palette" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Colors
+                  </h3>
+                  {colorsOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
+                </button>
+                
+                {colorsOpen && (
+                  <div className="mt-4 space-y-6">
+                    <div>
+                      <label className="text-xs font-semibold text-neutral-700 block mb-2">Background Color</label>
+                      <div className="flex flex-wrap gap-2">
+                        {palette.map(c => (
+                          <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={setBgColor} />
+                        ))}
+                        <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={setBgColor} />
+                      </div>
+                    </div>
+                    <div className="h-px bg-neutral-100 w-full" />
+                    <div>
+                      <div className="flex justify-between items-center mb-2">
+                        <label className="text-xs font-semibold text-neutral-700">Shape Color</label>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        {palette.map(c => (
+                          <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={setShapeSolidColor} />
+                        ))}
+                        <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={setShapeSolidColor} />
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Action Buttons (Fixed Bottom) */}
+            <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3 shrink-0">
+              <button onClick={handleRandomise} className="w-full py-3 px-4 bg-white hover:bg-neutral-100 border border-neutral-300 text-neutral-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98]">
+                <Icon name="Shuffle" size={18} /> Randomise
+              </button>
+              <div className="flex gap-3">
+                <button onClick={handleDownload} className="flex-1 py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow active:scale-[0.98]">
+                  <Icon name="Download" size={18} /> Download
+                </button>
+                <button onClick={() => copyToClipboard(svgMarkup)} className="flex-1 py-3 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98]">
+                  {copyStatus ? <span className="text-indigo-600 text-sm">{copyStatus}</span> : <><Icon name="Copy" size={18} /> Copy Code</>}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT PANEL: Canvas */}
+          <div className="flex-1 relative flex flex-col overflow-hidden min-h-[50vh] md:min-h-screen">
+            
+            {/* Branding Header */}
+            <div className="absolute top-0 left-0 right-0 z-10 flex items-center pointer-events-none" style={{ paddingLeft: '25px', paddingTop: '25px' }}>
+              <svg width="80" height="80" viewBox="0 0 60 60" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ marginRight: '25px', flexShrink: 0 }}>
+                <path d="M49.3268 24.3141C47.8181 26.944 47.5478 29.578 47.5994 32.3039C47.6471 34.9378 47.6968 37.4218 46.3869 39.7037C45.246 41.6917 43.5126 42.9177 41.6104 44.0916C41.2983 44.2836 40.9842 44.4756 40.6642 44.6676C38.4021 46.0216 36.0606 47.4315 34.6135 49.9515C31.7094 55.0114 33.3572 59.0993 33.4268 59.2693C33.6375 59.7752 34.1642 60.0712 34.7009 59.9852C43.6875 58.5333 51.4418 53.1674 55.9718 45.2736C60.5079 37.3698 61.2513 27.928 58.0073 19.3722C57.9854 19.3142 57.9576 19.2582 57.9278 19.2042C57.7111 18.8282 57.3016 18.5902 56.8544 18.6102C56.6616 18.6162 52.3482 19.0482 49.3268 24.3161V24.3141ZM56.9041 19.6082C56.9757 19.6062 57.0293 19.6462 57.0591 19.6882C57.6257 22.5001 57.1903 25.4501 55.7651 28.46C54.5784 30.9619 52.7139 33.5099 50.2173 36.0358C49.5355 36.7258 48.8418 37.3778 48.16 37.9838C48.6629 36.1218 48.6291 34.1939 48.5953 32.3119V32.2839C48.5496 29.926 48.7106 27.39 50.1895 24.8141C52.9365 20.0262 56.761 19.6202 56.9061 19.6082H56.9041Z" fill={headerColor}/>
+                <path d="M15.292 16.2696C18.3114 16.2696 20.7126 15.1896 23.0323 13.7797C25.2765 12.4197 27.3894 11.1357 30.0073 11.1357C32.2892 11.1357 34.2114 12.0337 36.1713 13.1037C36.4933 13.2797 36.8153 13.4577 37.1394 13.6397C39.4352 14.9336 41.8205 16.2696 44.7127 16.2696C50.5209 16.2696 53.2143 12.7897 53.3256 12.6457C53.6556 12.2077 53.6476 11.6017 53.3037 11.1777C47.5611 4.0739 39.0655 0 30.0053 0C20.9352 0 12.4356 4.0739 6.693 11.1777C6.65325 11.2257 6.61946 11.2777 6.58765 11.3317C6.37099 11.7077 6.37099 12.1837 6.61349 12.5637C6.71487 12.7277 9.24329 16.2716 15.288 16.2696H15.292ZM7.45232 12.0197C7.41456 11.9597 7.42251 11.8897 7.44437 11.8437C9.5812 9.94376 12.3382 8.84778 15.6419 8.58579C18.3889 8.36779 21.5156 8.71978 24.9366 9.63176C25.8708 9.88175 26.7792 10.1598 27.6419 10.4497C25.7873 10.9417 24.1454 11.9357 22.5433 12.9077L22.5195 12.9217C20.5138 14.1397 18.2498 15.2676 15.292 15.2676C9.79588 15.2676 7.53581 12.1377 7.45232 12.0177V12.0197Z" fill={headerColor}/>
+                <path d="M25.3857 49.9455C23.877 47.3156 21.7461 45.7636 19.3727 44.4456C17.0809 43.1697 14.9182 41.9717 13.6083 39.6898C12.4673 37.7018 12.2785 35.5779 12.2208 33.3339C12.2109 32.9659 12.2049 32.5959 12.199 32.2219C12.1652 29.574 12.1214 26.8281 10.6743 24.3081C7.77025 19.2483 3.42702 18.6403 3.24812 18.6163C2.70745 18.5463 2.18865 18.8583 1.99385 19.3683C-1.25015 27.924 -0.508728 37.3638 4.02135 45.2576C8.55739 53.1614 16.3136 58.5313 25.2982 59.9813C25.3598 59.9913 25.4215 59.9953 25.4831 59.9953C25.9144 59.9953 26.3259 59.7573 26.5306 59.3553C26.6221 59.1853 28.4071 55.2094 25.3837 49.9435L25.3857 49.9455ZM25.6461 58.9013C25.6123 58.9653 25.5507 58.9913 25.499 58.9953C22.7956 58.0833 20.4739 56.2294 18.5955 53.4814C17.0351 51.1975 15.7749 48.2975 14.8486 44.8596C14.5962 43.9197 14.3815 42.9917 14.2006 42.0917C15.5523 43.4617 17.228 44.3957 18.8659 45.3056L18.8897 45.3196C20.9411 46.4576 23.0441 47.8676 24.523 50.4435C27.2701 55.2314 25.7057 58.7673 25.6461 58.8993V58.9013Z" fill={headerColor}/>
+              </svg>
+              <div className="flex flex-col">
+                <h1 style={{ fontSize: '36px', fontWeight: 400, color: headerColor, lineHeight: 1 }}>The Life Line</h1>
+                <p style={{ fontSize: '36px', fontWeight: 250, color: headerColor, opacity: 1, lineHeight: 1, marginTop: '4px' }}>Tawuniya graphic language</p>
+              </div>
+            </div>
+
+            {/* Workspace Area */}
+            <div className="flex-1 relative w-full h-full overflow-hidden">
+              <div className="absolute inset-0 flex items-center justify-center p-12">
+                 <svg xmlns="http://www.w3.org/2000/svg" viewBox={viewBox} className="w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
+                  <path 
+                    d={pathData} 
+                    fill={shapeSolidColor} 
+                    fillRule="evenodd" 
+                    className="transition-all duration-300 ease-out" 
+                  />
+                </svg>
+              </div>
+            </div>
+
+            {/* View Controls */}
+            <div className="absolute bottom-6 right-6 z-10 bg-white shadow-lg rounded-full p-1 border border-neutral-200 flex">
+              <button onClick={() => setShowCode(false)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${!showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}>
+                <Icon name="Shapes" size={16} /> Preview
+              </button>
+              <button onClick={() => setShowCode(true)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}>
+                 <Icon name="Type" size={16} /> SVG Code
+              </button>
+            </div>
+
+            {showCode && (
+              <div className="absolute inset-0 z-0 bg-neutral-900/95 backdrop-blur-sm p-8 flex items-center justify-center">
+                <div className="bg-neutral-800 border border-neutral-700 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col h-3/4">
+                  <div className="flex justify-between items-center p-4 border-b border-neutral-700 bg-neutral-900">
+                    <span className="text-neutral-300 font-mono text-sm">tawuniya-graphic-language.svg</span>
+                    <button onClick={() => copyToClipboard(svgMarkup)} className="text-neutral-400 hover:text-white transition-colors p-2 rounded hover:bg-neutral-700" title="Copy Code">
+                      <Icon name="Copy" size={18} />
+                    </button>
+                  </div>
+                  <div className="p-4 overflow-auto flex-1 text-sm font-mono text-emerald-400 whitespace-pre-wrap">
+                    {svgMarkup}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>

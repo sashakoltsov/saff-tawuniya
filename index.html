@@ -345,7 +345,7 @@
         }
 
         const stickOut = W[0] / 9.0; 
-        const HUGE_EXT = 8000; 
+        const HUGE_EXT = 2000; 
         
         let core_top_pts = [], render_top_pts = [];
         core_top_pts.push({x: cx[0] - W[0]/2 - stickOut, y: -h, isBridgeCorner: true});
@@ -455,7 +455,6 @@
 
       const vParts = viewBox.split(' ').map(Number);
       const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">
-      <rect x="-100000" y="-100000" width="200000" height="200000" fill="${bgColor}" />
       <path d="${pathData}" fill="${shapeSolidColor}" fill-rule="evenodd" />
     </svg>`;
 

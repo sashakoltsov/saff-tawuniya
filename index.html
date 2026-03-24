@@ -13,16 +13,15 @@
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
   
-  <!-- React & ReactDOM (Production UMDS) -->
+  <!-- React & ReactDOM -->
   <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
   <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
   
-  <!-- Babel for in-browser JSX compilation -->
+  <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
   <style>
     body { font-family: 'Commissioner', sans-serif; margin: 0; overflow: hidden; }
-    /* Hide scrollbar for cleaner UI */
     .hide-scrollbar::-webkit-scrollbar { display: none; }
     .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
   </style>
@@ -31,515 +30,110 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState } = React;
+    const { useState, useEffect } = React;
 
-    // --- Inlined SVG Icons ---
-    const IconPaths = {
-      Download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></>,
-      Copy: <><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>,
-      Type: <><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></>,
-      Shapes: <><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></>,
-      BoxSelect: <><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></>,
-      Layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></>,
-      Route: <><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></>,
-      Repeat: <><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></>,
-      Grid: <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>,
-      Palette: <><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.836-.437-1.124-.294-.312-.359-.765-.114-1.169.254-.409.696-.619 1.139-.619h1.5C18.536 17.4 22 13.9 22 12c0-5.5-4.5-10-10-10z"/></>,
-      Plus: <><path d="M5 12h14"/><path d="M12 5v14"/></>,
-      ChevronDown: <><path d="m6 9 6 6 6-6"/></>,
-      ChevronRight: <><path d="m9 18 6-6-6-6"/></>,
-      Shuffle: <><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></>,
-      Activity: <><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></>,
-      RefreshCcw: <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></>,
-      ArrowLeftRight: <><path d="M8 3 4 7l4 4"/><path d="M4 7h16"/><path d="m16 21 4-4-4-4"/><path d="M20 17H4"/></>,
-      RowsAll: <><rect x="4" y="5" width="16" height="2" rx="1" fill="currentColor" stroke="none"/><rect x="4" y="11" width="16" height="2" rx="1" fill="currentColor" stroke="none"/><rect x="4" y="17" width="16" height="2" rx="1" fill="currentColor" stroke="none"/></>,
-      RowsAlt: <><rect x="4" y="5" width="16" height="2" rx="1" fill="currentColor" stroke="none"/><rect x="4" y="11" width="16" height="2" rx="1" fill="currentColor" stroke="none" opacity="0.2"/><rect x="4" y="17" width="16" height="2" rx="1" fill="currentColor" stroke="none"/></>
+    // --- Math & Geometry Engine ---
+    const rotatePoints = (pts, deg) => {
+      if (!deg) return pts;
+      const rad = (deg * Math.PI) / 180;
+      const cos = Math.cos(rad);
+      const sin = Math.sin(rad);
+      return pts.map(p => ({ ...p, x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
     };
 
-    const Icon = ({ name, size = 24, className = "" }) => (
-      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-        {IconPaths[name]}
-      </svg>
-    );
-
-    // --- Application Components ---
-    const PolygonIcon = ({ n, active, onClick }) => {
-      const pts = [];
-      for(let i=0; i<n; i++) {
-        let a = i * 2 * Math.PI / n - Math.PI/2;
-        pts.push(`${12 + 8*Math.cos(a)},${12 + 8*Math.sin(a)}`);
+    const cleanPoly = (pts) => {
+      let clean = [];
+      for (let i = 0; i < pts.length; i++) {
+        let p = pts[i];
+        if (clean.length === 0) { clean.push(p); continue; }
+        let prev = clean[clean.length - 1];
+        if (Math.hypot(p.x - prev.x, p.y - prev.y) > 0.1) {
+          clean.push(p);
+        } else {
+          if (p.isBridgeCorner) prev.isBridgeCorner = true;
+          if (p.isOuterCutoff) prev.isOuterCutoff = true;
+          if (p.isVBridgeCorner) prev.isVBridgeCorner = true;
+        }
       }
-      return (
-        <button 
-          onClick={onClick} 
-          className={`p-2 rounded border transition-all flex flex-col items-center justify-center gap-1.5 ${active ? 'bg-indigo-50 border-indigo-400 text-indigo-700 shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'}`}
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24">
-            <polygon points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" />
-          </svg>
-          <span className="text-[10px] font-bold leading-none">{n} Sides</span>
-        </button>
-      );
+      if (clean.length > 1 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 0.1) {
+        if (clean[clean.length - 1].isBridgeCorner) clean[0].isBridgeCorner = true;
+        if (clean[clean.length - 1].isOuterCutoff) clean[0].isOuterCutoff = true;
+        if (clean[clean.length - 1].isVBridgeCorner) clean[0].isVBridgeCorner = true;
+        clean.pop();
+      }
+      let finalClean = [];
+      for (let i = 0; i < clean.length; i++) {
+        let prev = clean[(i - 1 + clean.length) % clean.length];
+        let curr = clean[i];
+        let next = clean[(i + 1) % clean.length];
+        let dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
+        let dx2 = next.x - curr.x, dy2 = next.y - curr.y;
+        let cross = dx1 * dy2 - dy1 * dx2;
+        let dot = dx1 * dx2 + dy1 * dy2;
+        if (Math.abs(cross) < 0.1 && dot > 0) continue; 
+        finalClean.push(curr);
+      }
+      return finalClean.length >= 3 ? finalClean : clean;
     };
 
-    const ColorSwatch = ({ color, selected, disabled, onClick }) => (
-      <button
-        onClick={() => !disabled && onClick(color)}
-        className={`w-8 h-8 rounded-full border-2 transition-all shrink-0 ${selected ? 'border-white outline outline-2 outline-indigo-400 scale-110 shadow-md' : disabled ? 'border-transparent opacity-20 cursor-not-allowed' : 'border-transparent hover:scale-110 shadow-sm'}`}
-        style={{ backgroundColor: color }}
-        title={color}
-      />
-    );
-
-    const CustomColorPicker = ({ color, disabled, onChange }) => (
-      <div className={`relative w-8 h-8 rounded-full overflow-hidden border-2 transition-all shrink-0 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:scale-110 shadow-sm border-neutral-200'}`} title="Custom Color">
-        <div className="absolute inset-0 bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)] rounded-full pointer-events-none flex items-center justify-center">
-          <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm">
-            <Icon name="Plus" size={12} className="text-neutral-600" />
-          </div>
-        </div>
-        <input 
-          type="color" 
-          value={color} 
-          onChange={(e) => !disabled && onChange(e.target.value)} 
-          className="absolute -inset-4 w-16 h-16 opacity-0 cursor-pointer"
-          disabled={disabled}
-        />
-      </div>
-    );
-
-    const App = () => {
-      // Main Logic Parameters
-      const [layoutMode, setLayoutMode] = useState('line'); 
-      const [lineCount, setLineCount] = useState(3);
-      const [loopCount, setLoopCount] = useState(6);
-      const [patternRowCount, setPatternRowCount] = useState(5);
-      const [inclineRatio, setInclineRatio] = useState(0.20); 
-      const [roundingRatio, setRoundingRatio] = useState(1.0); 
-      const [vBridgeRoundingRatio, setVBridgeRoundingRatio] = useState(1.0);
-      const [rotation, setRotation] = useState(0); 
-      const [infiniteEdges, setInfiniteEdges] = useState(true);
-      const [outerRoundingRatio, setOuterRoundingRatio] = useState(1.0);
-      const [verticalModeOn, setVerticalModeOn] = useState(false);
-
-      // Grid Connection States (For Vertical Connections Mode)
-      const [gridPills, setGridPills] = useState(Array.from({length: 40}, () => Array(40).fill(true)));
-      const [gridHBridges, setGridHBridges] = useState(Array.from({length: 40}, () => Array(40).fill(true)));
-      const [gridVBridges, setGridVBridges] = useState(Array.from({length: 40}, () => Array(40).fill(false)));
-
-      // Dimensions
-      const [pillLength, setPillLength] = useState(450);
-      const [bridgeGap, setBridgeGap] = useState(180); 
-      const [pillHeight, setPillHeight] = useState(160);
-      const [bridgeThickness, setBridgeThickness] = useState(4);
-      const [patternRowSpacing, setPatternRowSpacing] = useState(250);
-      const [loopFillRatio, setLoopFillRatio] = useState(0.65); 
-
-      // Variation Arrays 
-      const [vRowSpacings, setVRowSpacings] = useState(Array(40).fill(1));
-      const [vHeights, setVHeights] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
-      const [vLengths, setVLengths] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
-      const [vGaps, setVGaps] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
-      const [vInclines, setVInclines] = useState(Array.from({length: 40}, () => Array(40).fill(0.20)));
-      const [activeVarTab, setActiveVarTab] = useState('rowGap');
-
-      // Interaction States
-      const [hoveredRow, setHoveredRow] = useState(null);
-      const [selectedRow, setSelectedRow] = useState(null);
-
-      // Colors
-      const palette = [
-        '#F8F5FF', '#EDE9FE', '#D9D2F6', '#C4B5FD', '#A78BFA', 
-        '#8B5CF6', '#A270FF', '#7E40FF', '#7C3AED', '#6D28D9', 
-        '#5B21B6', '#4C1D95', '#3E2568', '#2E1065', '#170633'
-      ];
-      const [bgColor, setBgColor] = useState('#D9D2F6');
-      const [shapeSolidColor, setShapeSolidColor] = useState('#3E2568');
-
-      // UI State
-      const [showCode, setShowCode] = useState(false);
-      const [copyStatus, setCopyStatus] = useState('');
+    const roundPolygon = (pts, ratio, lineModeBridgeCap, outerRatio = 1.0, vBridgeRatio = 1.0) => {
+      if (ratio <= 0.001 && outerRatio <= 0.001 && vBridgeRatio <= 0.001) return "M " + pts.map(p => `${p.x},${p.y}`).join(" L ") + " Z";
       
-      // Collapsible Sections 
-      const [coreOpen, setCoreOpen] = useState(false);
-      const [dimenOpen, setDimenOpen] = useState(false);
-      const [varOpen, setVarOpen] = useState(false);
-      const [colorsOpen, setColorsOpen] = useState(false);
+      const n = pts.length;
+      const edges = [];
+      for (let i = 0; i < n; i++) {
+        let dx = pts[(i+1)%n].x - pts[i].x;
+        let dy = pts[(i+1)%n].y - pts[i].y;
+        edges.push({ dx, dy, len: Math.hypot(dx, dy) });
+      }
+      
+      let d = "";
+      for (let i = 0; i < n; i++) {
+        let p = pts[i];
+        let currentRatio = ratio;
+        if (p.isOuterCutoff) currentRatio = outerRatio;
+        else if (p.isVBridgeCorner) currentRatio = vBridgeRatio;
 
-      const shapeCount = (layoutMode === 'line' || layoutMode === 'pattern') ? lineCount : loopCount;
-      const headerColor = shapeSolidColor;
-
-      const handleLayoutMode = (mode) => {
-        setLayoutMode(mode);
-        setSelectedRow(null);
-        if (mode === 'line' || mode === 'pattern') {
-          setPillLength(Math.max(40, pillLength));
-          setPillHeight(Math.max(10, pillHeight));
-        }
-        if (mode !== 'pattern' && activeVarTab === 'rowGap') {
-            setActiveVarTab('height');
-        }
-      };
-
-      const handleGlobalIncline = (val) => {
-        setInclineRatio(val);
-        setVInclines(Array.from({length: 40}, () => Array(40).fill(val)));
-      };
-
-      const getPresetArray = (type, min, max, base, count) => {
-        const arr = Array(40).fill(base);
-        for(let i=0; i<count; i++) {
-          if (type === 'gradual') {
-            arr[i] = count > 1 ? min + (max - min) * (i / (count - 1)) : max;
-          } else if (type === 'wave') {
-            arr[i] = count > 1 ? min + (max - min) * Math.sin((i / (count - 1)) * Math.PI) : max;
-          } else if (type === 'zig-zag') {
-            arr[i] = i % 2 === 0 ? max : min;
-          } else if (type === 'random') {
-            arr[i] = min + Math.random() * (max - min);
-          } else if (type === 'reset') {
-            arr[i] = base;
-          }
-        }
-        return arr;
-      };
-
-      const applyVarPreset = (rowIdx, type, stateArr, setter, min, max, base) => {
-        const newArr = [...stateArr];
-        newArr[rowIdx] = getPresetArray(type, min, max, base, shapeCount);
-        setter(newArr);
-      };
-
-      const applySwapDirection = (rowIdx, stateArr, setter, min, max) => {
-        const newArr = [...stateArr];
-        const newRow = [...newArr[rowIdx]];
-        for(let i=0; i<shapeCount; i++) {
-            newRow[i] = min + max - newRow[i];
-        }
-        newArr[rowIdx] = newRow;
-        setter(newArr);
-      };
-
-      const applyToAllRows = (rowIdx, stateArr, setter) => {
-        const newArr = [...stateArr];
-        const refRow = [...newArr[rowIdx]];
-        for(let i=0; i<40; i++) newArr[i] = [...refRow];
-        setter(newArr);
-      };
-
-      const applyToAltRows = (rowIdx, stateArr, setter) => {
-        const newArr = [...stateArr];
-        const refRow = [...newArr[rowIdx]];
-        const isEven = rowIdx % 2 === 0;
-        for(let i=0; i<40; i++) {
-          if ((i % 2 === 0) === isEven) newArr[i] = [...refRow];
-        }
-        setter(newArr);
-      };
-
-      const apply1DVarPreset = (type, stateArr, setter, min, max, base, count) => {
-        const preset = getPresetArray(type, min, max, base, count);
-        const newArr = Array(40).fill(base);
-        for(let i=0; i<count; i++) newArr[i] = preset[i];
-        setter(newArr);
-      };
-
-      const apply1DSwapDirection = (stateArr, setter, min, max, count) => {
-        const n = [...stateArr];
-        for(let i=0; i<count; i++) n[i] = min + max - n[i];
-        setter(n);
-      };
-
-      const handleRandomiseColors = () => {
-        const bgIdx = Math.floor(Math.random() * palette.length);
-        const rBg = palette[bgIdx];
-        setBgColor(rBg);
-        const validFg = palette.filter((_, idx) => Math.abs(idx - bgIdx) >= 2);
-        const rFg = validFg[Math.floor(Math.random() * validFg.length)];
-        setShapeSolidColor(rFg);
-      };
-
-      const handleRandomise = (isDynamic) => {
-        const modeList = ['line', 'loop', 'pattern'];
-        const mode = modeList[Math.floor(Math.random() * modeList.length)];
-        setLayoutMode(mode);
-        setSelectedRow(null);
-
-        let newIncline = 0.20;
-        let newShapeCount = shapeCount;
-
-        if (mode === 'line' || mode === 'pattern') {
-          newShapeCount = Math.floor(Math.random() * 8) + 1;
-          setLineCount(newShapeCount);
-          newIncline = Math.random() * 0.70 + 0.10; 
-          setRoundingRatio(Math.random() * 0.20 + 0.80); 
-          setVBridgeRoundingRatio(Math.random() * 0.50 + 0.50); 
-          setBridgeGap(Math.floor(Math.random() * 641) + 160); 
-          const pH = Math.floor(Math.random() * 321) + 80; 
-          setPillHeight(pH);
-          const thickMax = Math.min(7, Math.max(4, pH - 1)); 
-          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
-          setPillLength(Math.floor(Math.random() * 601) + 400); 
-
-          if (mode === 'pattern') {
-            // Give reasonable values on full randomizer to avoid excessive lag during casual clicking
-            setPatternRowCount(Math.floor(Math.random() * 8) + 3); 
-            setPatternRowSpacing(Math.floor(Math.random() * 400) + 100);
-            
-            let newP = Array.from({length: 40}, () => Array(40).fill(true));
-            let newH = Array.from({length: 40}, () => Array(40).fill(true));
-            let newV = Array.from({length: 40}, () => Array(40).fill(false));
-            
-            const isVMode = Math.random() > 0.5;
-            setVerticalModeOn(isVMode);
-            
-            if (isVMode) {
-              for(let r=0; r<40; r++) {
-                 for(let c=0; c<40; c++) {
-                    newP[r][c] = Math.random() > 0.15;
-                    newH[r][c] = Math.random() > 0.1;
-                    newV[r][c] = Math.random() > 0.6;
-                 }
-              }
-            }
-            setGridPills(newP); setGridHBridges(newH); setGridVBridges(newV);
-          }
-        } else if (mode === 'loop') {
-          newShapeCount = Math.floor(Math.random() * 8) + 3;
-          setLoopCount(newShapeCount);
-          newIncline = Math.random() * 0.50 + 0.30; 
-          setRoundingRatio(Math.random() * 0.40 + 0.60); 
-          setLoopFillRatio(Math.random() * 0.70 + 0.20); 
-          const pH = Math.floor(Math.random() * 121) + 80; 
-          setPillHeight(pH);
-          const thickMax = Math.min(7, Math.max(4, pH - 1)); 
-          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
-        }
-
-        setInclineRatio(newIncline);
-        setRotation(0); 
-        setOuterRoundingRatio(1.0);
-
-        let newH = Array.from({length: 40}, () => Array(40).fill(1));
-        let newL = Array.from({length: 40}, () => Array(40).fill(1));
-        let newG = Array.from({length: 40}, () => Array(40).fill(1));
-        let newI = Array.from({length: 40}, () => Array(40).fill(newIncline));
-        let newRS = Array(40).fill(1);
-
-        if (isDynamic) {
-          const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
-          const rows = mode === 'pattern' ? 40 : 1;
-          const isAlternate = mode === 'pattern' && Math.random() > 0.5;
-
-          let pA = presets[Math.floor(Math.random() * presets.length)];
-          let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
-          let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
-          let arrA_I = getPresetArray(pA, 0.0, 0.9, newIncline, newShapeCount);
-          let arrA_G = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
-
-          let pB = presets[Math.floor(Math.random() * presets.length)];
-          let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_H;
-          let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_L;
-          let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, newIncline, newShapeCount) : arrA_I;
-          let arrB_G = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_G;
-
-          for(let r=0; r<rows; r++) {
-              newH[r] = r % 2 === 0 ? arrA_H : arrB_H;
-              newL[r] = r % 2 === 0 ? arrA_L : arrB_L;
-              newI[r] = r % 2 === 0 ? arrA_I : arrB_I;
-              newG[r] = r % 2 === 0 ? arrA_G : arrB_G;
-          }
-
-          if (mode === 'pattern') {
-             let pRS = presets[Math.floor(Math.random() * presets.length)];
-             newRS = getPresetArray(pRS, 0.3, 2.0, 1, 39);
-          }
-        }
-
-        setVHeights(newH); setVLengths(newL); setVGaps(newG); setVInclines(newI); setVRowSpacings(newRS);
-        handleRandomiseColors();
-      };
-
-      const handleRandomiseVariations = () => {
-        const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
-        const rows = layoutMode === 'pattern' ? patternRowCount : 1;
-        const isAlternate = layoutMode === 'pattern' && Math.random() > 0.5;
-
-        let pA = presets[Math.floor(Math.random() * presets.length)];
-        let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
-        let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
-        let arrA_I = getPresetArray(pA, 0.0, 0.9, inclineRatio, shapeCount);
-        let arrA_G = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
-
-        let pB = presets[Math.floor(Math.random() * presets.length)];
-        let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_H;
-        let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_L;
-        let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, inclineRatio, shapeCount) : arrA_I;
-        let arrB_G = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_G;
-
-        let newH = [...vHeights], newL = [...vLengths], newG = [...vGaps], newI = [...vInclines];
-        for(let r=0; r<rows; r++) {
-            newH[r] = r % 2 === 0 ? arrA_H : arrB_H;
-            newL[r] = r % 2 === 0 ? arrA_L : arrB_L;
-            newI[r] = r % 2 === 0 ? arrA_I : arrB_I;
-            newG[r] = r % 2 === 0 ? arrA_G : arrB_G;
-        }
-        setVHeights(newH); setVLengths(newL); setVGaps(newG); setVInclines(newI);
-
-        if (layoutMode === 'pattern') {
-            let pRS = presets[Math.floor(Math.random() * presets.length)];
-            setVRowSpacings(getPresetArray(pRS, 0.3, 2.0, 1, patternRowCount - 1));
-        }
-      };
-
-      const handleResetAllVariations = () => {
-        setVHeights(Array.from({length: 40}, () => Array(40).fill(1)));
-        setVLengths(Array.from({length: 40}, () => Array(40).fill(1)));
-        setVGaps(Array.from({length: 40}, () => Array(40).fill(1)));
-        setVInclines(Array.from({length: 40}, () => Array(40).fill(inclineRatio)));
-        setVRowSpacings(Array(40).fill(1));
-      };
-
-      const togglePill = (r, c) => { let n = [...gridPills]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridPills(n); };
-      const toggleHBridge = (r, c) => { let n = [...gridHBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridHBridges(n); };
-      const toggleVBridge = (r, c) => { let n = [...gridVBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridVBridges(n); };
-
-      const handleConnectAll = () => {
-         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(true)));
-      };
-
-      const handleDisconnectAll = () => {
-         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(false)));
-         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(false)));
-      };
-
-      const handleConnectRows = () => {
-         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(false)));
-      };
-
-      const handleConnectCols = () => {
-         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
-         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(false)));
-         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(true)));
-      };
-
-      const isColorDisabled = (color, target) => {
-        const bgIdx = palette.indexOf(bgColor);
-        const fgIdx = palette.indexOf(shapeSolidColor);
-        const colorIdx = palette.indexOf(color);
-
-        if (colorIdx === -1) return false;
-
-        if (target === 'bg') {
-          if (fgIdx === -1) return color === shapeSolidColor;
-          return Math.abs(colorIdx - fgIdx) < 2;
-        }
-        if (target === 'shapeSolid') {
-          if (bgIdx === -1) return color === bgColor;
-          return Math.abs(colorIdx - bgIdx) < 2;
-        }
-        return false;
-      };
-
-      const rotatePoints = (pts, deg) => {
-        if (!deg) return pts;
-        const rad = (deg * Math.PI) / 180;
-        const cos = Math.cos(rad);
-        const sin = Math.sin(rad);
-        return pts.map(p => ({ ...p, x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos }));
-      };
-
-      const cleanPoly = (pts) => {
-        let clean = [];
-        for (let i = 0; i < pts.length; i++) {
-          let p = pts[i];
-          if (clean.length === 0) { clean.push(p); continue; }
-          let prev = clean[clean.length - 1];
-          if (Math.hypot(p.x - prev.x, p.y - prev.y) > 0.1) {
-            clean.push(p);
-          } else {
-            if (p.isBridgeCorner) prev.isBridgeCorner = true;
-            if (p.isOuterCutoff) prev.isOuterCutoff = true;
-            if (p.isVBridgeCorner) prev.isVBridgeCorner = true;
-          }
-        }
-        if (clean.length > 1 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 0.1) {
-          if (clean[clean.length - 1].isBridgeCorner) clean[0].isBridgeCorner = true;
-          if (clean[clean.length - 1].isOuterCutoff) clean[0].isOuterCutoff = true;
-          if (clean[clean.length - 1].isVBridgeCorner) clean[0].isVBridgeCorner = true;
-          clean.pop();
-        }
-        let finalClean = [];
-        for (let i = 0; i < clean.length; i++) {
-          let prev = clean[(i - 1 + clean.length) % clean.length];
-          let curr = clean[i];
-          let next = clean[(i + 1) % clean.length];
-          let dx1 = curr.x - prev.x, dy1 = curr.y - prev.y;
-          let dx2 = next.x - curr.x, dy2 = next.y - curr.y;
-          let cross = dx1 * dy2 - dy1 * dx2;
-          let dot = dx1 * dx2 + dy1 * dy2;
-          if (Math.abs(cross) < 0.1 && dot > 0) continue; 
-          finalClean.push(curr);
-        }
-        return finalClean.length >= 3 ? finalClean : clean;
-      };
-
-      const roundPolygon = (pts, ratio, lineModeBridgeCap, outerRatio = 1.0, vBridgeRatio = 1.0) => {
-        if (ratio <= 0.001 && outerRatio <= 0.001 && vBridgeRatio <= 0.001) return "M " + pts.map(p => `${p.x},${p.y}`).join(" L ") + " Z";
+        let prevEdge = edges[(i-1+n)%n];
+        let nextEdge = edges[i];
+        let T_max = Math.min(prevEdge.len, nextEdge.len) / 2.0;
         
-        const n = pts.length;
-        const edges = [];
-        for (let i = 0; i < n; i++) {
-          let dx = pts[(i+1)%n].x - pts[i].x;
-          let dy = pts[(i+1)%n].y - pts[i].y;
-          edges.push({ dx, dy, len: Math.hypot(dx, dy) });
+        if (lineModeBridgeCap !== undefined && p.isBridgeCorner) {
+          T_max = Math.min(T_max, lineModeBridgeCap.maxT);
         }
         
-        let d = "";
-        for (let i = 0; i < n; i++) {
-          let p = pts[i];
-          let currentRatio = ratio;
-          if (p.isOuterCutoff) currentRatio = outerRatio;
-          else if (p.isVBridgeCorner) currentRatio = vBridgeRatio;
-
-          let prevEdge = edges[(i-1+n)%n];
-          let nextEdge = edges[i];
-          let T_max = Math.min(prevEdge.len, nextEdge.len) / 2.0;
-          
-          if (lineModeBridgeCap !== undefined && p.isBridgeCorner) {
-            T_max = Math.min(T_max, lineModeBridgeCap.maxT);
-          }
-          
-          let T = T_max * currentRatio;
-          if (T < 0.1) {
-            d += `${i === 0 ? 'M' : 'L'} ${p.x},${p.y} `;
-            continue;
-          }
-          
-          let dot = (-prevEdge.dx) * nextEdge.dx + (-prevEdge.dy) * nextEdge.dy;
-          let cross = (-prevEdge.dx) * nextEdge.dy - (-prevEdge.dy) * nextEdge.dx;
-          let alpha = Math.atan2(Math.abs(cross), dot);
-          let phi = Math.PI - alpha;
-          let circle_kappa = Math.abs(phi) < 0.0001 ? 2.0/3.0 : (4.0/3.0) * Math.tan(phi/4.0) / Math.tan(phi/2.0);
-          circle_kappa = Math.max(0, Math.min(circle_kappa, 1.0)); 
-          
-          let t1 = { x: p.x + (-prevEdge.dx / prevEdge.len) * T, y: p.y + (-prevEdge.dy / prevEdge.len) * T };
-          let t2 = { x: p.x + (nextEdge.dx / nextEdge.len) * T, y: p.y + (nextEdge.dy / nextEdge.len) * T };
-          let c1 = { x: t1.x + (p.x - t1.x) * circle_kappa, y: t1.y + (p.y - t1.y) * circle_kappa };
-          let c2 = { x: t2.x + (p.x - t2.x) * circle_kappa, y: t2.y + (p.y - t2.y) * circle_kappa };
-          
-          d += `${i === 0 ? 'M' : 'L'} ${t1.x},${t1.y} `;
-          d += `C ${c1.x},${c1.y} ${c2.x},${c2.y} ${t2.x},${t2.y} `;
+        let T = T_max * currentRatio;
+        if (T < 0.1) {
+          d += `${i === 0 ? 'M' : 'L'} ${p.x},${p.y} `;
+          continue;
         }
-        return d + "Z";
-      };
+        
+        let dot = (-prevEdge.dx) * nextEdge.dx + (-prevEdge.dy) * nextEdge.dy;
+        let cross = (-prevEdge.dx) * nextEdge.dy - (-prevEdge.dy) * nextEdge.dx;
+        let alpha = Math.atan2(Math.abs(cross), dot);
+        let phi = Math.PI - alpha;
+        let circle_kappa = Math.abs(phi) < 0.0001 ? 2.0/3.0 : (4.0/3.0) * Math.tan(phi/4.0) / Math.tan(phi/2.0);
+        circle_kappa = Math.max(0, Math.min(circle_kappa, 1.0)); 
+        
+        let t1 = { x: p.x + (-prevEdge.dx / prevEdge.len) * T, y: p.y + (-prevEdge.dy / prevEdge.len) * T };
+        let t2 = { x: p.x + (nextEdge.dx / nextEdge.len) * T, y: p.y + (nextEdge.dy / nextEdge.len) * T };
+        let c1 = { x: t1.x + (p.x - t1.x) * circle_kappa, y: t1.y + (p.y - t1.y) * circle_kappa };
+        let c2 = { x: t2.x + (p.x - t2.x) * circle_kappa, y: t2.y + (p.y - t2.y) * circle_kappa };
+        
+        d += `${i === 0 ? 'M' : 'L'} ${t1.x},${t1.y} `;
+        d += `C ${c1.x},${c1.y} ${c2.x},${c2.y} ${t2.x},${t2.y} `;
+      }
+      return d + "Z";
+    };
 
-      // 3. Engine Generation
+    const generateGeometry = ({
+      layoutMode, shapeCount, patternRowCount, patternRowSpacing,
+      pillLength, pillHeight, bridgeThickness, bridgeGap,
+      roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
+      loopFillRatio, rotation, infiniteEdges, verticalModeOn,
+      vLengths, vHeights, vInclines, vGaps, vRowSpacings,
+      gridPills, gridHBridges, gridVBridges, halftonePixels
+    }) => {
       let pathDataArray = [];
       let viewBox = "";
 
@@ -547,43 +141,35 @@
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       let padX = 40, padY = 40;
 
-      if (layoutMode === 'line' || layoutMode === 'pattern') {
+      if (layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') {
         const N = Math.max(1, shapeCount);
-        const rows = layoutMode === 'pattern' ? patternRowCount : 1;
-        const spacing = layoutMode === 'pattern' ? patternRowSpacing : 0;
+        const rows = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
+        const spacing = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowSpacing : 0;
         const HUGE_EXT = 8000; 
 
-        // 1. Calculate Y positions to dynamically determine max height
-        let cy_arr = [];
-        let y_pos = [];
+        let cy_arr = [], y_pos = [];
         for (let r = 0; r < rows; r++) {
             if (r === 0) y_pos.push(0);
-            else {
-                let sp = spacing * vRowSpacings[r - 1];
-                y_pos.push(y_pos[r - 1] + sp);
-            }
+            else y_pos.push(y_pos[r - 1] + spacing * vRowSpacings[r - 1]);
         }
         let center_offset = rows > 1 ? y_pos[rows - 1] / 2 : 0;
         cy_arr = y_pos.map(y => y - center_offset);
 
-        // 2. Build Grid while enforcing intersection limit rules
         let W_grid = [], H_grid = [], I_grid = [], BL_grid = [];
+        let activePillMask = Array.from({length: rows}, () => Array(N).fill(true));
+
+        // Pass 1: Build Base Grid Metrics
         for(let r=0; r<rows; r++) {
             let W = [], H_arr = [], I_arr = [], BL = [];
-            
-            // Dynamic Intersection Prevention
             let max_H = Infinity;
             if (r > 0) max_H = Math.min(max_H, (cy_arr[r] - cy_arr[r-1]) / 2);
             if (r < rows - 1) max_H = Math.min(max_H, (cy_arr[r+1] - cy_arr[r]) / 2);
 
             for (let c=0; c<N; c++) {
                 W.push(pillLength * vLengths[r][c]);
-                
                 let desired_H = (pillHeight / 2.0) * vHeights[r][c];
-                let safe_H = Math.min(desired_H, max_H - 0.5); // Ensure shapes do not cross center line
-                safe_H = Math.max(h + 0.1, safe_H); // Ensure height is always bigger than the bridge connection to allow rounding
-
-                H_arr.push(safe_H);
+                let safe_H = Math.min(desired_H, max_H - 0.5); 
+                H_arr.push(Math.max(h + 0.1, safe_H)); 
                 I_arr.push(vInclines[r][c] * (W[c] / 2));
                 BL.push(bridgeGap * vGaps[r][c]);
             }
@@ -592,8 +178,7 @@
 
         let cx_grid = [];
         for (let r = 0; r < rows; r++) {
-            let row_cx = [];
-            let curr_x = 0;
+            let row_cx = [], curr_x = 0;
             for (let c = 0; c < N; c++) {
                 if (c === 0) row_cx.push(0);
                 else {
@@ -604,31 +189,60 @@
             cx_grid.push(row_cx);
         }
 
+        // Halftone Pass: Override metrics based on luminance
+        if (layoutMode === 'halftone' && halftonePixels) {
+            let local_min_cx = Infinity, local_max_cx = -Infinity;
+            let local_min_cy = Infinity, local_max_cy = -Infinity;
+            for (let r = 0; r < rows; r++) {
+                local_min_cy = Math.min(local_min_cy, cy_arr[r]);
+                local_max_cy = Math.max(local_max_cy, cy_arr[r]);
+                for (let c = 0; c < N; c++) {
+                    local_min_cx = Math.min(local_min_cx, cx_grid[r][c]);
+                    local_max_cx = Math.max(local_max_cx, cx_grid[r][c]);
+                }
+            }
+
+            for (let r = 0; r < rows; r++) {
+                for (let c = 0; c < N; c++) {
+                    let cx = cx_grid[r][c];
+                    let cy = cy_arr[r];
+                    let px_pct = local_max_cx === local_min_cx ? 0.5 : (cx - local_min_cx) / (local_max_cx - local_min_cx);
+                    let py_pct = local_max_cy === local_min_cy ? 0.5 : (cy - local_min_cy) / (local_max_cy - local_min_cy);
+                    
+                    let ix = Math.floor(px_pct * (halftonePixels.w - 1));
+                    let iy = Math.floor(py_pct * (halftonePixels.h - 1));
+                    let lum = halftonePixels.lums[iy * halftonePixels.w + ix];
+                    
+                    let dotScale = 1.0 - lum; 
+                    
+                    let max_H = Infinity;
+                    if (r > 0) max_H = Math.min(max_H, (cy_arr[r] - cy_arr[r-1]) / 2);
+                    if (r < rows - 1) max_H = Math.min(max_H, (cy_arr[r+1] - cy_arr[r]) / 2);
+
+                    let newH = (pillHeight / 2.0) * (dotScale * 1.5); // Boost scale slightly
+                    H_grid[r][c] = Math.max(h + 0.1, Math.min(newH, max_H - 0.5));
+                    
+                    if (dotScale < 0.10) activePillMask[r][c] = false;
+                }
+            }
+        }
+
         let next = new Map();
         let coords = new Map();
-
-        const addLink = (r1, c1, p1, r2, c2, p2) => {
-            next.set(`${r1},${c1},${p1}`, `${r2},${c2},${p2}`);
-        };
-
-        const vMode = verticalModeOn && layoutMode === 'pattern';
+        const addLink = (r1, c1, p1, r2, c2, p2) => next.set(`${r1},${c1},${p1}`, `${r2},${c2},${p2}`);
+        const vMode = verticalModeOn && (layoutMode === 'pattern' || layoutMode === 'halftone');
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < N; c++) {
-                let cx = cx_grid[r][c];
-                let cy = cy_arr[r];
-                let W = W_grid[r][c];
-                let H = H_grid[r][c];
-                let inc = I_grid[r][c];
-                let h_bridge = h;
-
+                let cx = cx_grid[r][c], cy = cy_arr[r];
+                let W = W_grid[r][c], H = H_grid[r][c], inc = I_grid[r][c], h_bridge = h;
                 let pts = {};
-                let isPillOn = !vMode || gridPills[r][c];
+                let isPillOn = (!vMode || gridPills[r][c]) && activePillMask[r][c];
 
-                let hasN = vMode && r > 0 && gridVBridges[r-1][c];
-                let hasS = vMode && r < rows - 1 && gridVBridges[r][c];
-                let hasW = c > 0 && (!vMode || gridHBridges[r][c-1]);
-                let hasE = c < N - 1 && (!vMode || gridHBridges[r][c]);
+                let hasN = vMode && r > 0 && gridVBridges[r-1][c] && activePillMask[r-1][c] && activePillMask[r][c];
+                let hasS = vMode && r < rows - 1 && gridVBridges[r][c] && activePillMask[r+1][c] && activePillMask[r][c];
+                let hasW = c > 0 && (!vMode || gridHBridges[r][c-1]) && activePillMask[r][c-1] && activePillMask[r][c];
+                let hasE = c < N - 1 && (!vMode || gridHBridges[r][c]) && activePillMask[r][c+1] && activePillMask[r][c];
 
                 if (!isPillOn && !hasN && !hasS && !hasE && !hasW) continue;
 
@@ -638,11 +252,9 @@
                 if (isPillOn) {
                     let get_y = (dx) => {
                         if (inc <= 0.001) return -H;
-                        let dx_flat_left = -W/2 + inc;
-                        let dx_flat_right = W/2 - inc;
+                        let dx_flat_left = -W/2 + inc, dx_flat_right = W/2 - inc;
                         if (dx >= dx_flat_left && dx <= dx_flat_right) return -H;
-                        let dx_start_left = -W/2 + inc*(h_bridge/H);
-                        let dx_end_right = W/2 - inc*(h_bridge/H);
+                        let dx_start_left = -W/2 + inc*(h_bridge/H), dx_end_right = W/2 - inc*(h_bridge/H);
                         if (dx < dx_flat_left) {
                             if (Math.abs(dx_flat_left - dx_start_left) < 0.001) return -H;
                             let t = (dx - dx_start_left) / (dx_flat_left - dx_start_left);
@@ -701,9 +313,8 @@
                     addLink(r, c, 'S_L', r, c, 'W_B');
                 }
 
-                if (hasE) {
-                    addLink(r, c, 'E_T', r, c+1, 'W_T');
-                } else {
+                if (hasE) addLink(r, c, 'E_T', r, c+1, 'W_T');
+                else {
                     if (infiniteEdges && c === N - 1) {
                         coords.set(`${r},${c},Out_ET`, {x: cx + W/2 + HUGE_EXT, y: cy - h_bridge, isBridgeCorner: true});
                         coords.set(`${r},${c},Out_EB`, {x: cx + W/2 + HUGE_EXT, y: cy + h_bridge, isBridgeCorner: true});
@@ -718,15 +329,12 @@
                             coords.set(`${r},${c},Out_E`, {x: capX, y: cy, isOuterCutoff: true});
                             addLink(r, c, 'E_T', r, c, 'Out_E');
                             addLink(r, c, 'Out_E', r, c, 'E_B');
-                        } else {
-                            addLink(r, c, 'E_T', r, c, 'E_B');
-                        }
+                        } else addLink(r, c, 'E_T', r, c, 'E_B');
                     }
                 }
 
-                if (hasW) {
-                    addLink(r, c, 'W_B', r, c-1, 'E_B');
-                } else {
+                if (hasW) addLink(r, c, 'W_B', r, c-1, 'E_B');
+                else {
                     if (infiniteEdges && c === 0) {
                         coords.set(`${r},${c},Out_WB`, {x: cx - W/2 - HUGE_EXT, y: cy + h_bridge, isBridgeCorner: true});
                         coords.set(`${r},${c},Out_WT`, {x: cx - W/2 - HUGE_EXT, y: cy - h_bridge, isBridgeCorner: true});
@@ -741,9 +349,7 @@
                             coords.set(`${r},${c},Out_W`, {x: capX, y: cy, isOuterCutoff: true});
                             addLink(r, c, 'W_B', r, c, 'Out_W');
                             addLink(r, c, 'Out_W', r, c, 'W_T');
-                        } else {
-                            addLink(r, c, 'W_B', r, c, 'W_T');
-                        }
+                        } else addLink(r, c, 'W_B', r, c, 'W_T');
                     }
                 }
 
@@ -755,13 +361,10 @@
             }
         }
 
-        let visited = new Set();
-        let loops = [];
+        let visited = new Set(), loops = [];
         for (let startKey of next.keys()) {
             if (!visited.has(startKey)) {
-                let loop = [];
-                let curr = startKey;
-                let failsafe = 0;
+                let loop = [], curr = startKey, failsafe = 0;
                 while (!visited.has(curr) && failsafe < 5000) {
                     visited.add(curr);
                     let p = coords.get(curr);
@@ -774,58 +377,41 @@
         }
 
         for (let loop of loops) {
-            const rotated = rotatePoints(loop, rotation);
-            pathDataArray.push(roundPolygon(cleanPoly(rotated), roundingRatio, { h: h, maxT: bridgeGap / 2.0 }, outerRoundingRatio, vBridgeRoundingRatio));
+            pathDataArray.push(roundPolygon(cleanPoly(rotatePoints(loop, rotation)), roundingRatio, { h: h, maxT: bridgeGap / 2.0 }, outerRoundingRatio, vBridgeRoundingRatio));
         }
 
         minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < N; c++) {
-                let W = W_grid[r][c];
-                let H = H_grid[r][c];
-                let isPillOn = !vMode || gridPills[r][c];
-                if (!isPillOn) continue; 
-                
+                let W = W_grid[r][c], H = H_grid[r][c];
+                if (!activePillMask[r][c]) continue;
+                if (vMode && !gridPills[r][c]) continue; 
                 let corners = [
-                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] - H},
-                    {x: cx_grid[r][c] + W/2, y: cy_arr[r] - H},
-                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] + H},
-                    {x: cx_grid[r][c] + W/2, y: cy_arr[r] + H}
+                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] - H}, {x: cx_grid[r][c] + W/2, y: cy_arr[r] - H},
+                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] + H}, {x: cx_grid[r][c] + W/2, y: cy_arr[r] + H}
                 ];
-                let rotCorners = rotatePoints(corners, rotation);
-                rotCorners.forEach(p => {
+                rotatePoints(corners, rotation).forEach(p => {
                     minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
                     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
                 });
             }
         }
         if (minX === Infinity) { minX = -100; maxX = 100; minY = -100; maxY = 100; }
-        if (rotation % 180 === 0) padX = 0; 
-        else if (rotation % 180 === 90) padY = 0;
+        if (rotation % 180 === 0) padX = 0; else if (rotation % 180 === 90) padY = 0;
 
       } else if (layoutMode === 'loop') {
-        const N = Math.max(3, shapeCount);
-        const A = 300; 
-        const loopScale = 0.35; 
-        const h_loop = h * loopScale;
-
+        const N = Math.max(3, shapeCount), A = 300, loopScale = 0.35, h_loop = h * loopScale;
         const S_out = 2 * (A + h_loop) * Math.tan(Math.PI / N);
         const S_in  = 2 * (A - h_loop) * Math.tan(Math.PI / N);
-        const S = 2 * A * Math.tan(Math.PI / N); 
-        const W_base = S * loopFillRatio; 
+        const S = 2 * A * Math.tan(Math.PI / N), W_base = S * loopFillRatio; 
 
         let outer_pts = [], inner_pts = [];
-
         for (let i = 0; i < N; i++) {
-          let theta = i * (2 * Math.PI / N);
-          let cos = Math.cos(theta), sin = Math.sin(theta);
-          
+          let theta = i * (2 * Math.PI / N), cos = Math.cos(theta), sin = Math.sin(theta);
           let w_i = Math.min(S * 0.95, W_base * vLengths[0][i]);
           let ht = Math.max(h_loop + 0.1, (pillHeight / 2.0) * loopScale * vHeights[0][i]);
           let inc_i = vInclines[0][i] * (w_i / 2);
-          
-          let maxOffset = (S - w_i) / 2.0 - 0.1;
-          let offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[0][i] - 1) * (S/4)));
+          let maxOffset = (S - w_i) / 2.0 - 0.1, offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[0][i] - 1) * (S/4)));
 
           let anchor_x_top_left = Math.max(-S_out/2, offset_i - w_i/2 + inc_i * (h_loop/ht));
           let anchor_x_top_right = Math.min(S_out/2, offset_i + w_i/2 - inc_i * (h_loop/ht));
@@ -846,35 +432,410 @@
           for (let p of seg_bot) inner_pts.push({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos, isBridgeCorner: p.isBridgeCorner });
         }
 
-        outer_pts = rotatePoints(outer_pts, rotation);
-        inner_pts = rotatePoints(inner_pts, rotation);
-        const cleanOuter = cleanPoly(outer_pts);
-        const cleanInner = cleanPoly(inner_pts).reverse(); 
-
-        pathDataArray.push(`${roundPolygon(cleanOuter, roundingRatio)} ${roundPolygon(cleanInner, roundingRatio)}`);
-        outer_pts.forEach(p => {
+        pathDataArray.push(`${roundPolygon(cleanPoly(rotatePoints(outer_pts, rotation)), roundingRatio)} ${roundPolygon(cleanPoly(rotatePoints(inner_pts, rotation).reverse()), roundingRatio)}`);
+        rotatePoints(outer_pts, rotation).forEach(p => {
            minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
            minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
         });
       }
 
-      // PERFECT SQUARE VIEWBOX LOGIC
-      const contentW = maxX - minX + 2 * padX;
-      const contentH = maxY - minY + 2 * padY;
+      const contentW = maxX - minX + 2 * padX, contentH = maxY - minY + 2 * padY;
       const squareSize = Math.max(contentW, contentH, 100);
-      const cx = minX - padX + contentW / 2;
-      const cy = minY - padY + contentH / 2;
-      const squareMinX = cx - squareSize / 2;
-      const squareMinY = cy - squareSize / 2;
-      viewBox = `${squareMinX} ${squareMinY} ${squareSize} ${squareSize}`;
+      viewBox = `${minX - padX + contentW / 2 - squareSize / 2} ${minY - padY + contentH / 2 - squareSize / 2} ${squareSize} ${squareSize}`;
+
+      return { pathDataArray, viewBox };
+    };
+
+    // --- UI Components ---
+    const IconPaths = {
+      Download: <><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></>,
+      Copy: <><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></>,
+      Type: <><polyline points="4 7 4 4 20 4 20 7"/><line x1="9" x2="15" y1="20" y2="20"/><line x1="12" x2="12" y1="4" y2="20"/></>,
+      Shapes: <><path d="M8.3 10a.7.7 0 0 1-.626-1.079L11.4 3a.7.7 0 0 1 1.198-.043L16.3 8.9a.7.7 0 0 1-.572 1.1Z"/><rect x="3" y="14" width="7" height="7" rx="1"/><circle cx="17.5" cy="17.5" r="3.5"/></>,
+      BoxSelect: <><path d="M5 3a2 2 0 0 0-2 2"/><path d="M19 3a2 2 0 0 1 2 2"/><path d="M21 19a2 2 0 0 1-2 2"/><path d="M5 21a2 2 0 0 1-2-2"/><path d="M9 3h1"/><path d="M9 21h1"/><path d="M14 3h1"/><path d="M14 21h1"/><path d="M3 9v1"/><path d="M21 9v1"/><path d="M3 14v1"/><path d="M21 14v1"/></>,
+      Layers: <><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 12 12 17 22 12"/><polyline points="2 17 12 22 22 17"/></>,
+      Route: <><circle cx="6" cy="19" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/><circle cx="18" cy="5" r="3"/></>,
+      Repeat: <><path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/></>,
+      Grid: <><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></>,
+      Palette: <><circle cx="13.5" cy="6.5" r=".5" fill="currentColor"/><circle cx="17.5" cy="10.5" r=".5" fill="currentColor"/><circle cx="8.5" cy="7.5" r=".5" fill="currentColor"/><circle cx="6.5" cy="12.5" r=".5" fill="currentColor"/><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10c.926 0 1.648-.746 1.648-1.688 0-.437-.18-.836-.437-1.124-.294-.312-.359-.765-.114-1.169.254-.409.696-.619 1.139-.619h1.5C18.536 17.4 22 13.9 22 12c0-5.5-4.5-10-10-10z"/></>,
+      Plus: <><path d="M5 12h14"/><path d="M12 5v14"/></>,
+      ChevronDown: <><path d="m6 9 6 6 6-6"/></>,
+      ChevronRight: <><path d="m9 18 6-6-6-6"/></>,
+      Shuffle: <><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></>,
+      Activity: <><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></>,
+      RefreshCcw: <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></>,
+      Image: <><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>
+    };
+
+    const Icon = ({ name, size = 24, className = "" }) => (
+      <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{IconPaths[name]}</svg>
+    );
+
+    const PolygonIcon = ({ n, active, onClick }) => {
+      const pts = [];
+      for(let i=0; i<n; i++) {
+        let a = i * 2 * Math.PI / n - Math.PI/2;
+        pts.push(`${12 + 8*Math.cos(a)},${12 + 8*Math.sin(a)}`);
+      }
+      return (
+        <button onClick={onClick} className={`p-2 rounded border transition-all flex flex-col items-center justify-center gap-1.5 ${active ? 'bg-indigo-50 border-indigo-400 text-indigo-700 shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'}`}>
+          <svg width="20" height="20" viewBox="0 0 24 24"><polygon points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
+          <span className="text-[10px] font-bold leading-none">{n} Sides</span>
+        </button>
+      );
+    };
+
+    const ColorSwatch = ({ color, selected, disabled, onClick }) => (
+      <button onClick={() => !disabled && onClick(color)} className={`w-8 h-8 rounded-full border-2 transition-all shrink-0 ${selected ? 'border-white outline outline-2 outline-indigo-400 scale-110 shadow-md' : disabled ? 'border-transparent opacity-20 cursor-not-allowed' : 'border-transparent hover:scale-110 shadow-sm'}`} style={{ backgroundColor: color }} title={color} />
+    );
+
+    const CustomColorPicker = ({ color, disabled, onChange }) => (
+      <div className={`relative w-8 h-8 rounded-full overflow-hidden border-2 transition-all shrink-0 ${disabled ? 'opacity-20 cursor-not-allowed' : 'hover:scale-110 shadow-sm border-neutral-200'}`} title="Custom Color">
+        <div className="absolute inset-0 bg-[conic-gradient(red,yellow,lime,aqua,blue,magenta,red)] rounded-full pointer-events-none flex items-center justify-center">
+          <div className="w-5 h-5 bg-white rounded-full flex items-center justify-center shadow-sm"><Icon name="Plus" size={12} className="text-neutral-600" /></div>
+        </div>
+        <input type="color" value={color} onChange={(e) => !disabled && onChange(e.target.value)} className="absolute -inset-4 w-16 h-16 opacity-0 cursor-pointer" disabled={disabled} />
+      </div>
+    );
+
+    const createGrid = (rows, cols, val) => Array.from({length: rows}, () => Array(cols).fill(val));
+
+    const generateDefaultHalftone = () => {
+        const w = 100, h = 100;
+        const lums = new Float32Array(w * h);
+        for(let y=0; y<h; y++) {
+            for(let x=0; x<w; x++) {
+                const dx = x - w/2;
+                const dy = y - h/2;
+                const dist = Math.sqrt(dx*dx + dy*dy);
+                lums[y*w + x] = Math.max(0, Math.min(1, dist / (w/1.5)));
+            }
+        }
+        return { w, h, lums };
+    };
+
+    const App = () => {
+      // Main Logic Parameters
+      const [layoutMode, setLayoutMode] = useState('line'); 
+      const [lineCount, setLineCount] = useState(3);
+      const [loopCount, setLoopCount] = useState(6);
+      const [patternRowCount, setPatternRowCount] = useState(5);
+      const [inclineRatio, setInclineRatio] = useState(0.20); 
+      const [roundingRatio, setRoundingRatio] = useState(1.0); 
+      const [vBridgeRoundingRatio, setVBridgeRoundingRatio] = useState(1.0);
+      const [rotation, setRotation] = useState(0); 
+      const [infiniteEdges, setInfiniteEdges] = useState(true);
+      const [outerRoundingRatio, setOuterRoundingRatio] = useState(1.0);
+      const [verticalModeOn, setVerticalModeOn] = useState(false);
+
+      // Halftone specific
+      const [halftonePixels, setHalftonePixels] = useState(generateDefaultHalftone());
+      const [halftoneImgSrc, setHalftoneImgSrc] = useState(null);
+
+      // Grid Connection States
+      const [gridPills, setGridPills] = useState(createGrid(80, 40, true));
+      const [gridHBridges, setGridHBridges] = useState(createGrid(80, 40, true));
+      const [gridVBridges, setGridVBridges] = useState(createGrid(80, 40, false));
+
+      // Dimensions
+      const [pillLength, setPillLength] = useState(450);
+      const [bridgeGap, setBridgeGap] = useState(180); 
+      const [pillHeight, setPillHeight] = useState(160);
+      const [bridgeThickness, setBridgeThickness] = useState(4);
+      const [patternRowSpacing, setPatternRowSpacing] = useState(250);
+      const [loopFillRatio, setLoopFillRatio] = useState(0.65); 
+
+      // Variation Arrays 
+      const [vRowSpacings, setVRowSpacings] = useState(Array(80).fill(1));
+      const [vHeights, setVHeights] = useState(createGrid(80, 40, 1));
+      const [vLengths, setVLengths] = useState(createGrid(80, 40, 1));
+      const [vGaps, setVGaps] = useState(createGrid(80, 40, 1));
+      const [vInclines, setVInclines] = useState(createGrid(80, 40, 0.20));
+      const [activeVarTab, setActiveVarTab] = useState('rowGap');
+
+      // Interaction States
+      const [hoveredRow, setHoveredRow] = useState(null);
+      const [selectedRow, setSelectedRow] = useState(null);
+
+      // Colors
+      const palette = [
+        '#F8F5FF', '#EDE9FE', '#D9D2F6', '#C4B5FD', '#A78BFA', 
+        '#8B5CF6', '#A270FF', '#7E40FF', '#7C3AED', '#6D28D9', 
+        '#5B21B6', '#4C1D95', '#3E2568', '#2E1065', '#170633'
+      ];
+      const [bgColor, setBgColor] = useState('#D9D2F6');
+      const [shapeSolidColor, setShapeSolidColor] = useState('#3E2568');
+
+      // UI State
+      const [showCode, setShowCode] = useState(false);
+      const [copyStatus, setCopyStatus] = useState('');
+      const [coreOpen, setCoreOpen] = useState(false);
+      const [dimenOpen, setDimenOpen] = useState(false);
+      const [varOpen, setVarOpen] = useState(false);
+      const [colorsOpen, setColorsOpen] = useState(false);
+
+      const shapeCount = layoutMode === 'line' ? lineCount : (layoutMode === 'loop' ? loopCount : lineCount);
+      const headerColor = shapeSolidColor;
+
+      const handleLayoutMode = (mode) => {
+        setLayoutMode(mode);
+        setSelectedRow(null);
+        if (mode === 'line') {
+          setLineCount(Math.min(lineCount, 8));
+          setPillLength(Math.max(40, pillLength));
+          setPillHeight(Math.max(10, pillHeight));
+        } else if (mode === 'pattern') {
+          setLineCount(Math.min(lineCount, 10));
+          setPatternRowCount(Math.min(patternRowCount, 20));
+        } else if (mode === 'halftone') {
+          setLineCount(Math.max(10, Math.min(lineCount, 40)));
+          setPatternRowCount(Math.max(10, Math.min(patternRowCount, 80)));
+        }
+        if (mode !== 'pattern' && activeVarTab === 'rowGap') setActiveVarTab('height');
+      };
+
+      const handleImageUpload = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
+        const url = URL.createObjectURL(file);
+        setHalftoneImgSrc(url);
+        
+        const img = new Image();
+        img.onload = () => {
+          const canvas = document.createElement('canvas');
+          const MAX_DIM = 100;
+          let w = img.width, h = img.height;
+          if(w > h) { h = Math.floor(h * MAX_DIM / w); w = MAX_DIM; }
+          else { w = Math.floor(w * MAX_DIM / h); h = MAX_DIM; }
+          canvas.width = w; canvas.height = h;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, w, h);
+          const imgData = ctx.getImageData(0, 0, w, h);
+          const lums = new Float32Array(w * h);
+          for(let i=0; i<w*h; i++) {
+             let r = imgData.data[i*4], g = imgData.data[i*4+1], b = imgData.data[i*4+2];
+             lums[i] = (0.299*r + 0.587*g + 0.114*b) / 255.0;
+          }
+          setHalftonePixels({ w, h, lums });
+        };
+        img.src = url;
+      };
+
+      const handleGlobalIncline = (val) => {
+        setInclineRatio(val);
+        setVInclines(createGrid(80, 40, val));
+      };
+
+      const getPresetArray = (type, min, max, base, count) => {
+        const arr = Array(80).fill(base);
+        for(let i=0; i<count; i++) {
+          if (type === 'gradual') arr[i] = count > 1 ? min + (max - min) * (i / (count - 1)) : max;
+          else if (type === 'wave') arr[i] = count > 1 ? min + (max - min) * Math.sin((i / (count - 1)) * Math.PI) : max;
+          else if (type === 'zig-zag') arr[i] = i % 2 === 0 ? max : min;
+          else if (type === 'random') arr[i] = min + Math.random() * (max - min);
+          else if (type === 'reset') arr[i] = base;
+        }
+        return arr;
+      };
+
+      const applyVarPreset = (rowIdx, type, stateArr, setter, min, max, base) => {
+        const newArr = [...stateArr];
+        newArr[rowIdx] = getPresetArray(type, min, max, base, shapeCount);
+        setter(newArr);
+      };
+
+      const applySwapDirection = (rowIdx, stateArr, setter, min, max) => {
+        const newArr = [...stateArr];
+        const newRow = [...newArr[rowIdx]];
+        for(let i=0; i<shapeCount; i++) newRow[i] = min + max - newRow[i];
+        newArr[rowIdx] = newRow;
+        setter(newArr);
+      };
+
+      const applyToAllRows = (rowIdx, stateArr, setter) => {
+        const newArr = [...stateArr];
+        const refRow = [...newArr[rowIdx]];
+        for(let i=0; i<80; i++) newArr[i] = [...refRow];
+        setter(newArr);
+      };
+
+      const applyToAltRows = (rowIdx, stateArr, setter) => {
+        const newArr = [...stateArr];
+        const refRow = [...newArr[rowIdx]];
+        const isEven = rowIdx % 2 === 0;
+        for(let i=0; i<80; i++) if ((i % 2 === 0) === isEven) newArr[i] = [...refRow];
+        setter(newArr);
+      };
+
+      const apply1DVarPreset = (type, stateArr, setter, min, max, base, count) => {
+        const preset = getPresetArray(type, min, max, base, count);
+        const newArr = Array(80).fill(base);
+        for(let i=0; i<count; i++) newArr[i] = preset[i];
+        setter(newArr);
+      };
+
+      const apply1DSwapDirection = (stateArr, setter, min, max, count) => {
+        const n = [...stateArr];
+        for(let i=0; i<count; i++) n[i] = min + max - n[i];
+        setter(n);
+      };
+
+      const handleRandomiseColors = () => {
+        const bgIdx = Math.floor(Math.random() * palette.length);
+        setBgColor(palette[bgIdx]);
+        const validFg = palette.filter((_, idx) => Math.abs(idx - bgIdx) >= 2);
+        setShapeSolidColor(validFg[Math.floor(Math.random() * validFg.length)]);
+      };
+
+      const handleRandomise = (isDynamic) => {
+        const modeList = ['line', 'loop', 'pattern']; // Kept Halftone out of full randomizer so user doesn't lose image context
+        const mode = modeList[Math.floor(Math.random() * modeList.length)];
+        setLayoutMode(mode);
+        setSelectedRow(null);
+        setInfiniteEdges(true);
+        setVerticalModeOn(false);
+
+        let newIncline = 0.20;
+        let newShapeCount = shapeCount;
+
+        if (mode === 'line' || mode === 'pattern') {
+          newShapeCount = Math.floor(Math.random() * (mode === 'pattern' ? 10 : 8)) + 1;
+          setLineCount(newShapeCount);
+          newIncline = Math.random() * 0.70 + 0.10; 
+          setRoundingRatio(Math.random() * 0.20 + 0.80); 
+          setVBridgeRoundingRatio(Math.random() * 0.50 + 0.50); 
+          setBridgeGap(Math.floor(Math.random() * 641) + 160); 
+          const pH = Math.floor(Math.random() * 321) + 80; 
+          setPillHeight(pH);
+          const thickMax = Math.min(7, Math.max(4, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+          setPillLength(Math.floor(Math.random() * 601) + 400); 
+
+          if (mode === 'pattern') {
+            setPatternRowCount(Math.floor(Math.random() * 16) + 5); 
+            setPatternRowSpacing(Math.floor(Math.random() * 400) + 100);
+            
+            setGridPills(createGrid(80, 40, true)); 
+            setGridHBridges(createGrid(80, 40, true)); 
+            setGridVBridges(createGrid(80, 40, false));
+          }
+        } else if (mode === 'loop') {
+          newShapeCount = Math.floor(Math.random() * 8) + 3;
+          setLoopCount(newShapeCount);
+          newIncline = Math.random() * 0.50 + 0.30; 
+          setRoundingRatio(Math.random() * 0.40 + 0.60); 
+          setLoopFillRatio(Math.random() * 0.70 + 0.20); 
+          const pH = Math.floor(Math.random() * 121) + 80; 
+          setPillHeight(pH);
+          const thickMax = Math.min(7, Math.max(4, pH - 1)); 
+          setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+        }
+
+        setInclineRatio(newIncline);
+        setRotation(0); 
+        setOuterRoundingRatio(1.0);
+
+        let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1), nG = createGrid(80, 40, 1), nI = createGrid(80, 40, newIncline);
+        let nRS = Array(80).fill(1);
+
+        if (isDynamic) {
+          const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
+          const rows = mode === 'pattern' ? 40 : 1;
+          const isAlternate = mode === 'pattern' && Math.random() > 0.5;
+
+          let pA = presets[Math.floor(Math.random() * presets.length)];
+          let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
+          let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
+          let arrA_I = getPresetArray(pA, 0.0, 0.9, newIncline, newShapeCount);
+          let arrA_G = Array(40).fill(1); 
+
+          let pB = presets[Math.floor(Math.random() * presets.length)];
+          let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_H;
+          let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_L;
+          let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, newIncline, newShapeCount) : arrA_I;
+          let arrB_G = Array(40).fill(1); 
+
+          for(let r=0; r<rows; r++) {
+              nH[r] = r % 2 === 0 ? arrA_H : arrB_H;
+              nL[r] = r % 2 === 0 ? arrA_L : arrB_L;
+              nI[r] = r % 2 === 0 ? arrA_I : arrB_I;
+              nG[r] = r % 2 === 0 ? arrA_G : arrB_G;
+          }
+          if (mode === 'pattern') nRS = getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, 39);
+        }
+
+        setVHeights(nH); setVLengths(nL); setVGaps(nG); setVInclines(nI); setVRowSpacings(nRS);
+        handleRandomiseColors();
+      };
+
+      const handleRandomiseVariations = () => {
+        const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
+        const rows = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
+        const isAlternate = layoutMode === 'pattern' && Math.random() > 0.5;
+
+        let pA = presets[Math.floor(Math.random() * presets.length)];
+        let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
+        let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
+        let arrA_I = getPresetArray(pA, 0.0, 0.9, inclineRatio, shapeCount);
+        let arrA_G = Array(40).fill(1);
+
+        let pB = presets[Math.floor(Math.random() * presets.length)];
+        let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_H;
+        let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_L;
+        let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, inclineRatio, shapeCount) : arrA_I;
+        let arrB_G = Array(40).fill(1);
+
+        let newH = [...vHeights], newL = [...vLengths], newG = [...vGaps], newI = [...vInclines];
+        for(let r=0; r<rows; r++) {
+            newH[r] = r % 2 === 0 ? arrA_H : arrB_H;
+            newL[r] = r % 2 === 0 ? arrA_L : arrB_L;
+            newI[r] = r % 2 === 0 ? arrA_I : arrB_I;
+            newG[r] = r % 2 === 0 ? arrA_G : arrB_G;
+        }
+        setVHeights(newH); setVLengths(newL); setVGaps(newG); setVInclines(newI);
+        if (layoutMode === 'pattern') setVRowSpacings(getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, patternRowCount - 1));
+      };
+
+      const handleResetAllVariations = () => {
+        setVHeights(createGrid(80, 40, 1));
+        setVLengths(createGrid(80, 40, 1));
+        setVGaps(createGrid(80, 40, 1));
+        setVInclines(createGrid(80, 40, inclineRatio));
+        setVRowSpacings(Array(80).fill(1));
+      };
+
+      const togglePill = (r, c) => { let n = [...gridPills]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridPills(n); };
+      const toggleHBridge = (r, c) => { let n = [...gridHBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridHBridges(n); };
+      const toggleVBridge = (r, c) => { let n = [...gridVBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridVBridges(n); };
+
+      const handleConnectAll = () => { setGridPills(createGrid(80, 40, true)); setGridHBridges(createGrid(80, 40, true)); setGridVBridges(createGrid(80, 40, true)); };
+      const handleDisconnectAll = () => { setGridPills(createGrid(80, 40, true)); setGridHBridges(createGrid(80, 40, false)); setGridVBridges(createGrid(80, 40, false)); };
+      const handleConnectRows = () => { setGridPills(createGrid(80, 40, true)); setGridHBridges(createGrid(80, 40, true)); setGridVBridges(createGrid(80, 40, false)); };
+      const handleConnectCols = () => { setGridPills(createGrid(80, 40, true)); setGridHBridges(createGrid(80, 40, false)); setGridVBridges(createGrid(80, 40, true)); };
+
+      const isColorDisabled = (color, target) => {
+        const bgIdx = palette.indexOf(bgColor), fgIdx = palette.indexOf(shapeSolidColor), colorIdx = palette.indexOf(color);
+        if (colorIdx === -1) return false;
+        if (target === 'bg') return fgIdx === -1 ? color === shapeSolidColor : Math.abs(colorIdx - fgIdx) < 2;
+        if (target === 'shapeSolid') return bgIdx === -1 ? color === bgColor : Math.abs(colorIdx - bgIdx) < 2;
+        return false;
+      };
+
+      // Core generation logic
+      const { pathDataArray, viewBox } = generateGeometry({
+        layoutMode, shapeCount, patternRowCount, patternRowSpacing,
+        pillLength, pillHeight, bridgeThickness, bridgeGap,
+        roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
+        loopFillRatio, rotation, infiniteEdges, verticalModeOn,
+        vLengths, vHeights, vInclines, vGaps, vRowSpacings,
+        gridPills, gridHBridges, gridVBridges, halftonePixels
+      });
 
       const svgPathsMarkup = verticalModeOn || layoutMode !== 'pattern' 
         ? `<path d="${pathDataArray.join(" ")}" fill="${shapeSolidColor}" fill-rule="evenodd" />`
         : pathDataArray.map(d => `<path d="${d}" fill="${shapeSolidColor}" fill-rule="evenodd" />`).join('\n      ');
         
-      const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">
-      ${svgPathsMarkup}
-    </svg>`;
+      const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">\n      ${svgPathsMarkup}\n    </svg>`;
 
       const copyToClipboard = (text) => {
         const textArea = document.createElement("textarea");
@@ -883,13 +844,7 @@
         document.body.appendChild(textArea);
         textArea.focus();
         textArea.select();
-        try {
-          document.execCommand('copy');
-          setCopyStatus('Copied!');
-          setTimeout(() => setCopyStatus(''), 2000);
-        } catch (err) {
-          setCopyStatus('Failed to copy');
-        }
+        try { document.execCommand('copy'); setCopyStatus('Copied!'); setTimeout(() => setCopyStatus(''), 2000); } catch (err) { setCopyStatus('Failed to copy'); }
         document.body.removeChild(textArea);
       };
 
@@ -905,6 +860,14 @@
         URL.revokeObjectURL(url);
       };
 
+      // UI configuration map
+      const varConfigs = {
+        height: { state: vHeights, setter: setVHeights, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` },
+        length: { state: vLengths, setter: setVLengths, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` },
+        incline: { state: vInclines, setter: setVInclines, min: 0.0, max: 0.9, step: 0.01, format: v => `${Math.round((v/0.9)*100)}%` },
+        gap: { state: vGaps, setter: setVGaps, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` }
+      };
+
       const render1DVarSliders = (stateArr, setter, min, max, step, formatFn) => {
         const count = patternRowCount - 1;
         return (
@@ -918,139 +881,108 @@
               </div>
               <div className="flex gap-1">
                 <button onClick={()=>apply1DVarPreset('reset', stateArr, setter, min, max, 1, count)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-neutral-800 text-white rounded hover:bg-neutral-700 border border-neutral-800">Reset</button>
-                <button onClick={()=>apply1DSwapDirection(stateArr, setter, min, max, count)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50" title="Swap Direction">Swap</button>
+                <button onClick={()=>apply1DSwapDirection(stateArr, setter, min, max, count)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Swap</button>
               </div>
             </div>
-
             {count > 0 ? Array(count).fill(0).map((_, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-bold text-neutral-400 w-8">Gap {i+1}</span>
-                <input 
-                  type="range" min={min} max={max} step={step} value={stateArr[i]} 
-                  onChange={(e) => {
-                    let n = [...stateArr];
-                    n[i] = parseFloat(e.target.value);
-                    setter(n);
-                  }} 
-                  className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-                />
+                <input type="range" min={min} max={max} step={step} value={stateArr[i]} onChange={(e) => { let n = [...stateArr]; n[i] = parseFloat(e.target.value); setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                 <span className="text-[10px] font-mono font-bold text-indigo-600 w-8 text-right">{formatFn(stateArr[i])}</span>
               </div>
-            )) : (
-              <div className="text-xs text-neutral-500 text-center py-2">Add more rows to adjust gaps.</div>
-            )}
+            )) : <div className="text-xs text-neutral-500 text-center py-2">Add more rows to adjust gaps.</div>}
           </div>
         );
       };
 
-      const renderVarSliders = (title, stateArr, setter, min, max, step, formatFn, propType, rowIdx, isPopup = false) => (
+      const renderVarSliders = (stateArr, setter, min, max, step, formatFn, baseVal, rowIdx, isPopup = false) => (
         <div className={`space-y-3 bg-neutral-50/50 p-3 rounded-lg border border-neutral-200 ${isPopup ? 'border-none bg-transparent p-0 mt-0' : 'mt-3'}`}>
           <div className="flex flex-col gap-1 mb-3">
             <div className="flex gap-1">
-              <button onClick={()=>applyVarPreset(rowIdx, 'gradual', stateArr, setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Gradual</button>
-              <button onClick={()=>applyVarPreset(rowIdx, 'wave', stateArr, setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Wave</button>
-              <button onClick={()=>applyVarPreset(rowIdx, 'zig-zag', stateArr, setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Zig-Zag</button>
-              <button onClick={()=>applyVarPreset(rowIdx, 'random', stateArr, setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Random</button>
+              <button onClick={()=>applyVarPreset(rowIdx, 'gradual', stateArr, setter, min, max, baseVal)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Gradual</button>
+              <button onClick={()=>applyVarPreset(rowIdx, 'wave', stateArr, setter, min, max, baseVal)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Wave</button>
+              <button onClick={()=>applyVarPreset(rowIdx, 'zig-zag', stateArr, setter, min, max, baseVal)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Zig-Zag</button>
+              <button onClick={()=>applyVarPreset(rowIdx, 'random', stateArr, setter, min, max, baseVal)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Random</button>
             </div>
             <div className="flex gap-1">
-              <button onClick={()=>applyVarPreset(rowIdx, 'reset', stateArr, setter, min, max, propType==='incline'?inclineRatio:1)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-neutral-800 text-white rounded hover:bg-neutral-700 border border-neutral-800">Reset</button>
-              <button onClick={()=>applySwapDirection(rowIdx, stateArr, setter, min, max)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50" title="Swap Direction">Swap</button>
-              <button onClick={()=>applyToAllRows(rowIdx, stateArr, setter)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50" title="Apply to all rows">Apply All</button>
-              <button onClick={()=>applyToAltRows(rowIdx, stateArr, setter)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50" title="Apply to alternate rows">Apply Alt.</button>
+              <button onClick={()=>applyVarPreset(rowIdx, 'reset', stateArr, setter, min, max, baseVal)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-neutral-800 text-white rounded hover:bg-neutral-700 border border-neutral-800">Reset</button>
+              <button onClick={()=>applySwapDirection(rowIdx, stateArr, setter, min, max)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Swap</button>
+              <button onClick={()=>applyToAllRows(rowIdx, stateArr, setter)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Apply All</button>
+              <button onClick={()=>applyToAltRows(rowIdx, stateArr, setter)} className="flex-1 py-1.5 px-1 text-[9px] uppercase font-bold tracking-wider bg-white border border-neutral-300 text-neutral-600 rounded hover:bg-neutral-50">Apply Alt.</button>
             </div>
           </div>
-
           {Array(shapeCount).fill(0).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-bold text-neutral-400 w-4">{i+1}</span>
-              <input 
-                type="range" min={min} max={max} step={step} value={stateArr[rowIdx][i]} 
-                onChange={(e) => {
-                  let n = [...stateArr];
-                  let rowData = [...n[rowIdx]];
-                  rowData[i] = parseFloat(e.target.value);
-                  n[rowIdx] = rowData;
-                  setter(n);
-                }} 
-                className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" 
-              />
+              <input type="range" min={min} max={max} step={step} value={stateArr[rowIdx][i]} onChange={(e) => { let n = [...stateArr]; let rowData = [...n[rowIdx]]; rowData[i] = parseFloat(e.target.value); n[rowIdx] = rowData; setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
               <span className="text-[10px] font-mono font-bold text-indigo-600 w-8 text-right">{formatFn(stateArr[rowIdx][i])}</span>
             </div>
           ))}
         </div>
       );
 
-      const rowsToRender = layoutMode === 'pattern' ? patternRowCount : 1;
+      const rowsToRender = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
+      const activeConf = varConfigs[activeVarTab];
 
       return (
         <div className="min-h-screen text-neutral-900 flex flex-col md:flex-row selection:bg-indigo-200" style={{ backgroundColor: bgColor, fontFamily: "'Commissioner', sans-serif", fontWeight: 350 }}>
-          {/* Global Font Import */}
           <style>{`@import url('https://fonts.googleapis.com/css2?family=Commissioner:wght@250;300;350;400;600;700&display=swap');`}</style>
           
-          {/* LEFT PANEL: Controls */}
           <div className="w-full md:w-[380px] bg-white border-r border-neutral-200 shadow-xl z-20 flex flex-col shrink-0 h-screen">
-            
             <div className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
-
-              {/* Layout Mode Selector (Always visible) */}
               <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200">
-                <button onClick={() => handleLayoutMode('line')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'line' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                  <Icon name="Route" size={14} /> Line
-                </button>
-                <button onClick={() => handleLayoutMode('loop')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'loop' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                  <Icon name="Repeat" size={14} /> Loop
-                </button>
-                <button onClick={() => handleLayoutMode('pattern')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'pattern' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}>
-                  <Icon name="Grid" size={14} /> Pattern
-                </button>
+                <button onClick={() => handleLayoutMode('line')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'line' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Route" size={14} /> Line</button>
+                <button onClick={() => handleLayoutMode('loop')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'loop' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Repeat" size={14} /> Loop</button>
+                <button onClick={() => handleLayoutMode('pattern')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'pattern' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Grid" size={14} /> Pattern</button>
+                {/* Halftone mode hidden for now */}
+                {/* <button onClick={() => handleLayoutMode('halftone')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'halftone' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Image" size={14} /> Halftone</button> */}
               </div>
 
-              {/* Core Shape Logic */}
               <div>
                 <button onClick={() => setCoreOpen(!coreOpen)} className="w-full flex items-center justify-between group py-2">
-                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
-                    <Icon name="Layers" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Core Settings
-                  </h3>
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Layers" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Core Settings</h3>
                   {coreOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                 </button>
                 
                 {coreOpen && (
                   <div className="mt-4 space-y-6">
+                    {layoutMode === 'halftone' && (
+                      <div className="flex flex-col gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
+                        <label className="text-xs font-semibold text-neutral-700">Upload Image Mask</label>
+                        <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-neutral-600 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:uppercase file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
+                        <p className="text-[10px] text-neutral-500 mt-1 leading-tight">Darker image areas will generate thicker, overlapping shapes. Brighter areas will shrink or remove shapes.</p>
+                      </div>
+                    )}
 
-                    {/* 1. Shapes / Rows */}
-                    {layoutMode === 'line' || layoutMode === 'pattern' ? (
+                    {layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <label className="text-xs font-semibold text-neutral-700">Amount of Shapes</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{lineCount}</span>
                         </div>
-                        <input type="range" min="1" max={layoutMode === 'pattern' ? 40 : 8} step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'halftone' ? 40 : (layoutMode === 'pattern' ? 10 : 8)} step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
 
-                    {layoutMode === 'pattern' && (
+                    {layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <label className="text-xs font-semibold text-neutral-700">Amount of Rows</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{patternRowCount}</span>
                         </div>
-                        <input type="range" min="1" max="40" step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'halftone' ? 80 : 20} step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
-                    )}
+                    ) : null}
 
-                    {/* 2. Polygon (Loop Mode) */}
                     {layoutMode === 'loop' && (
                       <div>
                         <label className="text-xs font-semibold text-neutral-700 block mb-3">Polygon Structure</label>
                         <div className="grid grid-cols-4 gap-2">
-                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => (
-                            <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => setLoopCount(n)} />
-                          ))}
+                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => setLoopCount(n)} />)}
                         </div>
                       </div>
                     )}
 
-                    {/* 3. Shape Rotation */}
                     <div>
                       <div className="flex justify-between items-end mb-2">
                         <div>
@@ -1062,7 +994,6 @@
                       <input type="range" min="0" max="315" step="45" value={rotation} onChange={(e) => setRotation(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
-                    {/* 4. Shape Incline */}
                     <div>
                       <div className="flex justify-between items-end mb-2">
                         <div>
@@ -1071,18 +1002,9 @@
                         </div>
                         <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round((inclineRatio / 0.9) * 100)}%</span>
                       </div>
-                      <input 
-                        type="range" 
-                        min="0" 
-                        max="0.9" 
-                        step="0.01" 
-                        value={inclineRatio} 
-                        onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} 
-                        className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
-                      />
+                      <input type="range" min="0" max="0.9" step="0.01" value={inclineRatio} onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
-                    {/* 5. Corner Rounding */}
                     <div>
                       <div className="flex justify-between items-end mb-2">
                         <div>
@@ -1094,8 +1016,7 @@
                       <input type="range" min="0" max="1" step="0.01" value={roundingRatio} onChange={(e) => setRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
-                    {/* 6. Vertical Connection Rounding (Pattern Only) */}
-                    {layoutMode === 'pattern' && (
+                    {(layoutMode === 'pattern' || layoutMode === 'halftone') && (
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <div>
@@ -1108,21 +1029,17 @@
                       </div>
                     )}
 
-                    {/* 7. Presets Grid */}
                     <div className="grid grid-cols-3 gap-2 pt-2">
                       <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
                       <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
                       <button onClick={() => { handleGlobalIncline(0.9); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
                     </div>
 
-                    {/* 8. Vertical Connections Toggle & Grid (Pattern Only) */}
                     {layoutMode === 'pattern' && (
                       <div className="flex flex-col space-y-4 pt-4 border-t border-neutral-200">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-neutral-700">Vertical Connections</span>
-                          <button onClick={() => setVerticalModeOn(!verticalModeOn)} className={`w-8 h-4 rounded-full relative transition-colors ${verticalModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
-                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${verticalModeOn ? 'translate-x-4' : 'translate-x-0'}`} />
-                          </button>
+                          <button onClick={() => setVerticalModeOn(!verticalModeOn)} className={`w-8 h-4 rounded-full relative transition-colors ${verticalModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${verticalModeOn ? 'translate-x-4' : 'translate-x-0'}`} /></button>
                         </div>
                         {verticalModeOn && (
                           <div className="bg-neutral-50 py-6 px-2 rounded-xl border border-neutral-200 overflow-x-auto hide-scrollbar flex flex-col items-center">
@@ -1132,85 +1049,53 @@
                                 <button onClick={handleConnectRows} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Rows</button>
                                 <button onClick={handleConnectCols} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Cols</button>
                              </div>
-                             <div className="origin-top flex justify-center" style={{ transform: 'scale(0.7)' }}>
-                                <div className="grid gap-y-3 gap-x-2 w-max mx-auto" style={{ gridTemplateColumns: `repeat(${lineCount * 2 - 1}, auto)` }}>
-                                   {Array(patternRowCount).fill(0).map((_, r) => (
-                                      <React.Fragment key={`row-${r}`}>
-                                         {/* Pill & H-Bridge Row */}
-                                         {Array(lineCount).fill(0).map((_, c) => (
-                                            <React.Fragment key={`p-${r}-${c}`}>
-                                               <div className="flex justify-center items-center w-4 h-4">
-                                                  <button
-                                                    onClick={() => togglePill(r, c)}
-                                                    className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`}
-                                                    title="Toggle Shape"
-                                                  />
-                                               </div>
-                                               {c < lineCount - 1 && (
-                                                  <div className="flex justify-center items-center w-6 h-4">
-                                                     <button
-                                                       onClick={() => toggleHBridge(r, c)}
-                                                       className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
-                                                       title="Toggle Horizontal Bridge"
-                                                     />
-                                                  </div>
-                                               )}
-                                            </React.Fragment>
-                                         ))}
-                                         
-                                         {/* Vertical Bridge Row */}
-                                         {r < patternRowCount - 1 && Array(lineCount).fill(0).map((_, c) => (
-                                            <React.Fragment key={`v-${r}-${c}`}>
-                                               <div className="flex justify-center items-center w-4 h-6">
-                                                  <button
-                                                    onClick={() => toggleVBridge(r, c)}
-                                                    className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
-                                                    title="Toggle Vertical Bridge"
-                                                  />
-                                               </div>
-                                               {c < lineCount - 1 && <div className="w-6 h-6" />}
-                                            </React.Fragment>
-                                         ))}
-                                      </React.Fragment>
-                                   ))}
-                                </div>
-                             </div>
+                             
+                             {layoutMode !== 'halftone' ? (
+                               <div className="origin-top flex justify-center" style={{ transform: 'scale(0.7)' }}>
+                                  <div className="grid gap-y-3 gap-x-2 w-max mx-auto" style={{ gridTemplateColumns: `repeat(${lineCount * 2 - 1}, auto)` }}>
+                                     {Array(patternRowCount).fill(0).map((_, r) => (
+                                        <React.Fragment key={`row-${r}`}>
+                                           {Array(lineCount).fill(0).map((_, c) => (
+                                              <React.Fragment key={`p-${r}-${c}`}>
+                                                 <div className="flex justify-center items-center w-4 h-4"><button onClick={() => togglePill(r, c)} className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`} title="Toggle Shape" /></div>
+                                                 {c < lineCount - 1 && <div className="flex justify-center items-center w-6 h-4"><button onClick={() => toggleHBridge(r, c)} className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Horizontal Bridge" /></div>}
+                                              </React.Fragment>
+                                           ))}
+                                           {r < patternRowCount - 1 && Array(lineCount).fill(0).map((_, c) => (
+                                              <React.Fragment key={`v-${r}-${c}`}>
+                                                 <div className="flex justify-center items-center w-4 h-6"><button onClick={() => toggleVBridge(r, c)} className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Vertical Bridge" /></div>
+                                                 {c < lineCount - 1 && <div className="w-6 h-6" />}
+                                              </React.Fragment>
+                                           ))}
+                                        </React.Fragment>
+                                     ))}
+                                  </div>
+                               </div>
+                             ) : (
+                               <p className="text-xs text-neutral-500 text-center mx-4">Interactive schematic is hidden in Halftone mode due to immense scale. Use the bulk buttons above.</p>
+                             )}
                           </div>
                         )}
                       </div>
                     )}
 
-                    {/* 9. Side Lines Toggle */}
-                    {(layoutMode === 'line' || layoutMode === 'pattern') && (
+                    {(layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') && (
                       <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
                         <span className="text-xs font-semibold text-neutral-700">Side Lines</span>
-                        <button onClick={() => setInfiniteEdges(!infiniteEdges)} className={`w-8 h-4 rounded-full relative transition-colors ${infiniteEdges ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
-                          <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${infiniteEdges ? 'translate-x-4' : 'translate-x-0'}`} />
-                        </button>
+                        <button onClick={() => setInfiniteEdges(!infiniteEdges)} className={`w-8 h-4 rounded-full relative transition-colors ${infiniteEdges ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${infiniteEdges ? 'translate-x-4' : 'translate-x-0'}`} /></button>
                       </div>
                     )}
 
-                    {/* 10. Outer Edge Rounding (Visible when Side Lines are OFF) */}
-                    {!infiniteEdges && (layoutMode === 'line' || layoutMode === 'pattern') && (
+                    {!infiniteEdges && (layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') && (
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <div>
                             <label className="text-xs font-semibold text-neutral-700">Outer Edge Rounding</label>
                             <p className="text-[10px] text-neutral-500">0% Sharp → 100% Fully Round</p>
                           </div>
-                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">
-                            {Math.round(outerRoundingRatio * 100)}%
-                          </span>
+                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(outerRoundingRatio * 100)}%</span>
                         </div>
-                        <input 
-                          type="range" 
-                          min="0" 
-                          max="1" 
-                          step="0.01" 
-                          value={outerRoundingRatio} 
-                          onChange={(e) => setOuterRoundingRatio(parseFloat(e.target.value))} 
-                          className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" 
-                        />
+                        <input type="range" min="0" max="1" step="0.01" value={outerRoundingRatio} onChange={(e) => setOuterRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
                   </div>
@@ -1222,66 +1107,46 @@
               {/* Base Dimensions */}
               <div>
                 <button onClick={() => setDimenOpen(!dimenOpen)} className="w-full flex items-center justify-between group py-2">
-                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
-                    <Icon name="BoxSelect" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Base Dimensions
-                  </h3>
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="BoxSelect" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Base Dimensions</h3>
                   {dimenOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                 </button>
                 
                 {dimenOpen && (
                   <div className="mt-4 space-y-4">
-                    {layoutMode === 'line' || layoutMode === 'pattern' ? (
+                    {layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <>
                         <div>
-                          <div className="flex justify-between mb-1">
-                            <label className="text-xs font-medium text-neutral-600">Base Pill Length</label>
-                            <span className="text-xs text-neutral-400 font-mono">{pillLength}</span>
-                          </div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Length</label><span className="text-xs text-neutral-400 font-mono">{pillLength}</span></div>
                           <input type="range" min="40" max="1000" step="1" value={pillLength} onChange={(e) => setPillLength(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                         <div>
-                          <div className="flex justify-between mb-1">
-                            <label className="text-xs font-medium text-neutral-600">Base Bridge Gap</label>
-                            <span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span>
-                          </div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Bridge Gap</label><span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span></div>
                           <input type="range" min="0" max="800" step="1" value={bridgeGap} onChange={(e) => setBridgeGap(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     ) : (
                       <>
                         <div>
-                          <div className="flex justify-between mb-1">
-                            <label className="text-xs font-medium text-neutral-600">Pill Fill Amount</label>
-                            <span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span>
-                          </div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Pill Fill Amount</label><span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span></div>
                           <input type="range" min="0.05" max="0.95" step="0.01" value={loopFillRatio} onChange={(e) => setLoopFillRatio(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     )}
 
-                    {layoutMode === 'pattern' && (
+                    {layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <div>
-                        <div className="flex justify-between mb-1">
-                          <label className="text-xs font-medium text-neutral-600">Row Spacing</label>
-                          <span className="text-xs text-neutral-400 font-mono">{patternRowSpacing}</span>
-                        </div>
-                        <input type="range" min="10" max="1000" step="1" value={patternRowSpacing} onChange={(e) => setPatternRowSpacing(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                        <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Row Spacing</label><span className="text-xs text-neutral-400 font-mono">{patternRowSpacing}</span></div>
+                        <input type="range" min="50" max="1000" step="1" value={patternRowSpacing} onChange={(e) => setPatternRowSpacing(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                       </div>
-                    )}
+                    ) : null}
 
                     <div>
-                      <div className="flex justify-between mb-1">
-                        <label className="text-xs font-medium text-neutral-600">Base Pill Height</label>
-                        <span className="text-xs text-neutral-400 font-mono">{pillHeight}</span>
-                      </div>
+                      <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Height</label><span className="text-xs text-neutral-400 font-mono">{pillHeight}</span></div>
                       <input type="range" min="80" max="400" step="1" value={pillHeight} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
 
                     <div>
-                      <div className="flex justify-between mb-1">
-                        <label className="text-xs font-medium text-neutral-600">Bridge Thickness</label>
-                        <span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span>
-                      </div>
+                      <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Bridge Thickness</label><span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span></div>
                       <input type="range" min="1" max={Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
                   </div>
@@ -1293,9 +1158,7 @@
               {/* Variations Section */}
               <div>
                 <button onClick={() => setVarOpen(!varOpen)} className="w-full flex items-center justify-between group py-2">
-                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
-                    <Icon name="Activity" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Variations
-                  </h3>
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Activity" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Variations</h3>
                   {varOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                 </button>
                 
@@ -1304,33 +1167,26 @@
                     <div className="flex justify-between items-center mb-3">
                       <label className="text-xs font-semibold text-neutral-700">Property Select</label>
                       <div className="flex gap-1">
-                        <button onClick={handleRandomiseVariations} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                          <Icon name="Shuffle" size={10} /> Random Presets
-                        </button>
-                        <button onClick={handleResetAllVariations} className="text-[9px] uppercase font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                          <Icon name="RefreshCcw" size={10} /> Reset All
-                        </button>
+                        <button onClick={handleRandomiseVariations} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="Shuffle" size={10} /> Random Presets</button>
+                        <button onClick={handleResetAllVariations} className="text-[9px] uppercase font-bold text-red-600 bg-red-50 hover:bg-red-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="RefreshCcw" size={10} /> Reset All</button>
                       </div>
                     </div>
                     <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 overflow-x-auto hide-scrollbar">
-                      {layoutMode === 'pattern' && <button onClick={()=>setActiveVarTab('rowGap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'rowGap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Row Gap</button>}
+                      {(layoutMode === 'pattern' || layoutMode === 'halftone') && <button onClick={()=>setActiveVarTab('rowGap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'rowGap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Row Gap</button>}
                       <button onClick={()=>setActiveVarTab('height')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'height' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Height</button>
                       <button onClick={()=>setActiveVarTab('length')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'length' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Length</button>
                       <button onClick={()=>setActiveVarTab('incline')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'incline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Incline</button>
                       <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Left Gap</button>
                     </div>
 
-                    {activeVarTab === 'rowGap' && layoutMode === 'pattern' && render1DVarSliders(vRowSpacings, setVRowSpacings, 0.3, 3.0, 0.01, v => `${Math.round(v*100)}%`)}
+                    {activeVarTab === 'rowGap' && (layoutMode === 'pattern' || layoutMode === 'halftone') && render1DVarSliders(vRowSpacings, setVRowSpacings, 0.3, 3.0, 0.01, v => `${Math.round(v*100)}%`)}
 
-                    {activeVarTab !== 'rowGap' && Array(rowsToRender).fill(0).map((_, r) => (
+                    {activeVarTab !== 'rowGap' && activeConf && Array(rowsToRender).fill(0).map((_, r) => (
                       <div key={r} className="mb-4 mt-2">
-                        {layoutMode === 'pattern' && <h4 className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-1 mt-4">Row {r + 1}</h4>}
-                        {activeVarTab === 'height' && renderVarSliders('Height', vHeights, setVHeights, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'height', r)}
-                    {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length', r)}
-                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 0.9, 0.01, v => `${Math.round((v/0.9)*100)}%`, 'incline', r)}
-                    {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap', r)}
-                  </div>
-                ))}
+                        {(layoutMode === 'pattern' || layoutMode === 'halftone') && <h4 className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-1 mt-4">Row {r + 1}</h4>}
+                        {renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, activeVarTab === 'incline' ? inclineRatio : 1, r)}
+                      </div>
+                    ))}
                   </div>
                 )}
               </div>
@@ -1340,9 +1196,7 @@
               {/* Colors Section */}
               <div>
                 <button onClick={() => setColorsOpen(!colorsOpen)} className="w-full flex items-center justify-between group py-2">
-                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2">
-                    <Icon name="Palette" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Colors
-                  </h3>
+                  <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Palette" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Colors</h3>
                   {colorsOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                 </button>
                 
@@ -1350,28 +1204,20 @@
                   <div className="mt-4 space-y-6">
                     <div className="flex justify-between items-center -mb-2">
                       <label className="text-xs font-semibold text-neutral-700">Color Selection</label>
-                      <button onClick={handleRandomiseColors} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors">
-                        <Icon name="Shuffle" size={10} /> Random Colors
-                      </button>
+                      <button onClick={handleRandomiseColors} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="Shuffle" size={10} /> Random Colors</button>
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-2">Background Color</label>
                       <div className="flex flex-wrap gap-2">
-                        {palette.map(c => (
-                          <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={setBgColor} />
-                        ))}
+                        {palette.map(c => <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={setBgColor} />)}
                         <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={setBgColor} />
                       </div>
                     </div>
                     <div className="h-px bg-neutral-100 w-full" />
                     <div>
-                      <div className="flex justify-between items-center mb-2">
-                        <label className="text-xs font-semibold text-neutral-700">Shape Color</label>
-                      </div>
+                      <div className="flex justify-between items-center mb-2"><label className="text-xs font-semibold text-neutral-700">Shape Color</label></div>
                       <div className="flex flex-wrap gap-2">
-                        {palette.map(c => (
-                          <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={setShapeSolidColor} />
-                        ))}
+                        {palette.map(c => <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={setShapeSolidColor} />)}
                         <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={setShapeSolidColor} />
                       </div>
                     </div>
@@ -1383,20 +1229,12 @@
             {/* Action Buttons (Fixed Bottom) */}
             <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3 shrink-0 flex flex-col gap-2">
               <div className="flex gap-2">
-                <button onClick={() => handleRandomise(false)} className="flex-1 py-2 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]">
-                  <Icon name="Shuffle" size={12} /> Randomise Uniform
-                </button>
-                <button onClick={() => handleRandomise(true)} className="flex-1 py-2 px-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]">
-                  <Icon name="Shuffle" size={12} /> Randomise Dynamic
-                </button>
+                <button onClick={() => handleRandomise(false)} className="flex-1 py-2 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Randomise Uniform</button>
+                <button onClick={() => handleRandomise(true)} className="flex-1 py-2 px-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Randomise Dynamic</button>
               </div>
               <div className="flex gap-2">
-                <button onClick={handleDownload} className="flex-1 py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow active:scale-[0.98]">
-                  <Icon name="Download" size={18} /> Download
-                </button>
-                <button onClick={() => copyToClipboard(svgMarkup)} className="flex-1 py-3 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98]">
-                  {copyStatus ? <span className="text-indigo-600 text-sm">{copyStatus}</span> : <><Icon name="Copy" size={18} /> Copy Code</>}
-                </button>
+                <button onClick={handleDownload} className="flex-1 py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow active:scale-[0.98]"><Icon name="Download" size={18} /> Download</button>
+                <button onClick={() => copyToClipboard(svgMarkup)} className="flex-1 py-3 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm active:scale-[0.98]">{copyStatus ? <span className="text-indigo-600 text-sm">{copyStatus}</span> : <><Icon name="Copy" size={18} /> Copy Code</>}</button>
               </div>
             </div>
           </div>
@@ -1422,24 +1260,14 @@
               <div className="absolute inset-0 flex items-center justify-center p-12">
                  <svg xmlns="http://www.w3.org/2000/svg" viewBox={viewBox} className="w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
                   {verticalModeOn || layoutMode !== 'pattern' ? (
-                    <path 
-                      d={pathDataArray.join(" ")} 
-                      fill={shapeSolidColor} 
-                      fillRule="evenodd" 
-                      className="transition-all duration-300 ease-out" 
-                    />
+                    <path d={pathDataArray.join(" ")} fill={shapeSolidColor} fillRule="evenodd" className="transition-all duration-300 ease-out" />
                   ) : (
                     pathDataArray.map((d, r) => (
                       <path 
-                        key={r}
-                        d={d} 
-                        fill={hoveredRow === r ? 'white' : shapeSolidColor} 
-                        fillRule="evenodd" 
+                        key={r} d={d} fill={hoveredRow === r ? 'white' : shapeSolidColor} fillRule="evenodd" 
                         className="transition-all duration-300 ease-out cursor-pointer drop-shadow-sm hover:drop-shadow-lg"
                         style={{ opacity: hoveredRow !== null && hoveredRow !== r ? 0.5 : 1 }}
-                        onMouseEnter={() => setHoveredRow(r)}
-                        onMouseLeave={() => setHoveredRow(null)}
-                        onClick={() => setSelectedRow(r)}
+                        onMouseEnter={() => setHoveredRow(r)} onMouseLeave={() => setHoveredRow(null)} onClick={() => setSelectedRow(r)}
                       />
                     ))
                   )}
@@ -1451,11 +1279,8 @@
                 <div className="absolute bottom-6 left-6 z-20 w-80 max-h-[70vh] flex flex-col bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-neutral-200 overflow-hidden">
                   <div className="p-4 border-b border-neutral-200 flex justify-between items-center bg-white">
                     <h3 className="text-sm font-bold text-neutral-800">Row {selectedRow + 1} Variations</h3>
-                    <button onClick={() => setSelectedRow(null)} className="text-neutral-400 hover:text-neutral-800 p-1">
-                      <Icon name="Plus" size={16} className="rotate-45" />
-                    </button>
+                    <button onClick={() => setSelectedRow(null)} className="text-neutral-400 hover:text-neutral-800 p-1"><Icon name="Plus" size={16} className="rotate-45" /></button>
                   </div>
-                  
                   <div className="p-4 overflow-y-auto hide-scrollbar">
                     <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 mb-4">
                       <button onClick={()=>setActiveVarTab('height')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'height' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Height</button>
@@ -1463,25 +1288,16 @@
                       <button onClick={()=>setActiveVarTab('incline')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'incline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Incline</button>
                       <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Left Gap</button>
                     </div>
-
-                    {activeVarTab === 'height' && renderVarSliders('Height', vHeights, setVHeights, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'height', selectedRow, true)}
-                    {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length', selectedRow, true)}
-                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 0.9, 0.01, v => `${Math.round((v/0.9)*100)}%`, 'incline', selectedRow, true)}
-                    {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap', selectedRow, true)}
+                    {activeConf && renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, activeVarTab === 'incline' ? inclineRatio : 1, selectedRow, true)}
                   </div>
                 </div>
               )}
-
             </div>
 
             {/* View Controls */}
             <div className="absolute bottom-6 right-6 z-10 bg-white shadow-lg rounded-full p-1 border border-neutral-200 flex">
-              <button onClick={() => setShowCode(false)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${!showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}>
-                <Icon name="Shapes" size={16} /> Preview
-              </button>
-              <button onClick={() => setShowCode(true)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}>
-                 <Icon name="Type" size={16} /> SVG Code
-              </button>
+              <button onClick={() => setShowCode(false)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${!showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}><Icon name="Shapes" size={16} /> Preview</button>
+              <button onClick={() => setShowCode(true)} className={`px-4 py-2 rounded-full text-sm font-semibold transition-colors flex items-center gap-2 ${showCode ? 'bg-neutral-900 text-white' : 'text-neutral-600 hover:bg-neutral-100'}`}><Icon name="Type" size={16} /> SVG Code</button>
             </div>
 
             {showCode && (
@@ -1489,13 +1305,9 @@
                 <div className="bg-neutral-800 border border-neutral-700 w-full max-w-2xl rounded-xl shadow-2xl overflow-hidden flex flex-col h-3/4">
                   <div className="flex justify-between items-center p-4 border-b border-neutral-700 bg-neutral-900">
                     <span className="text-neutral-300 font-mono text-sm">tawuniya-graphic-language.svg</span>
-                    <button onClick={() => copyToClipboard(svgMarkup)} className="text-neutral-400 hover:text-white transition-colors p-2 rounded hover:bg-neutral-700" title="Copy Code">
-                      <Icon name="Copy" size={18} />
-                    </button>
+                    <button onClick={() => copyToClipboard(svgMarkup)} className="text-neutral-400 hover:text-white transition-colors p-2 rounded hover:bg-neutral-700" title="Copy Code"><Icon name="Copy" size={18} /></button>
                   </div>
-                  <div className="p-4 overflow-auto flex-1 text-sm font-mono text-emerald-400 whitespace-pre-wrap">
-                    {svgMarkup}
-                  </div>
+                  <div className="p-4 overflow-auto flex-1 text-sm font-mono text-emerald-400 whitespace-pre-wrap">{svgMarkup}</div>
                 </div>
               </div>
             )}

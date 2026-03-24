@@ -123,9 +123,9 @@
       const [verticalModeOn, setVerticalModeOn] = useState(false);
 
       // Grid Connection States (For Vertical Connections Mode)
-      const [gridPills, setGridPills] = useState(Array.from({length: 20}, () => Array(10).fill(true)));
-      const [gridHBridges, setGridHBridges] = useState(Array.from({length: 20}, () => Array(10).fill(true)));
-      const [gridVBridges, setGridVBridges] = useState(Array.from({length: 20}, () => Array(10).fill(false)));
+      const [gridPills, setGridPills] = useState(Array.from({length: 40}, () => Array(40).fill(true)));
+      const [gridHBridges, setGridHBridges] = useState(Array.from({length: 40}, () => Array(40).fill(true)));
+      const [gridVBridges, setGridVBridges] = useState(Array.from({length: 40}, () => Array(40).fill(false)));
 
       // Dimensions
       const [pillLength, setPillLength] = useState(450);
@@ -136,11 +136,11 @@
       const [loopFillRatio, setLoopFillRatio] = useState(0.65); 
 
       // Variation Arrays 
-      const [vRowSpacings, setVRowSpacings] = useState(Array(20).fill(1));
-      const [vHeights, setVHeights] = useState(Array.from({length: 20}, () => Array(10).fill(1)));
-      const [vLengths, setVLengths] = useState(Array.from({length: 20}, () => Array(10).fill(1)));
-      const [vGaps, setVGaps] = useState(Array.from({length: 20}, () => Array(10).fill(1)));
-      const [vInclines, setVInclines] = useState(Array.from({length: 20}, () => Array(10).fill(0.20)));
+      const [vRowSpacings, setVRowSpacings] = useState(Array(40).fill(1));
+      const [vHeights, setVHeights] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
+      const [vLengths, setVLengths] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
+      const [vGaps, setVGaps] = useState(Array.from({length: 40}, () => Array(40).fill(1)));
+      const [vInclines, setVInclines] = useState(Array.from({length: 40}, () => Array(40).fill(0.20)));
       const [activeVarTab, setActiveVarTab] = useState('rowGap');
 
       // Interaction States
@@ -183,11 +183,11 @@
 
       const handleGlobalIncline = (val) => {
         setInclineRatio(val);
-        setVInclines(Array.from({length: 20}, () => Array(10).fill(val)));
+        setVInclines(Array.from({length: 40}, () => Array(40).fill(val)));
       };
 
       const getPresetArray = (type, min, max, base, count) => {
-        const arr = Array(10).fill(base);
+        const arr = Array(40).fill(base);
         for(let i=0; i<count; i++) {
           if (type === 'gradual') {
             arr[i] = count > 1 ? min + (max - min) * (i / (count - 1)) : max;
@@ -223,7 +223,7 @@
       const applyToAllRows = (rowIdx, stateArr, setter) => {
         const newArr = [...stateArr];
         const refRow = [...newArr[rowIdx]];
-        for(let i=0; i<20; i++) newArr[i] = [...refRow];
+        for(let i=0; i<40; i++) newArr[i] = [...refRow];
         setter(newArr);
       };
 
@@ -231,7 +231,7 @@
         const newArr = [...stateArr];
         const refRow = [...newArr[rowIdx]];
         const isEven = rowIdx % 2 === 0;
-        for(let i=0; i<20; i++) {
+        for(let i=0; i<40; i++) {
           if ((i % 2 === 0) === isEven) newArr[i] = [...refRow];
         }
         setter(newArr);
@@ -239,7 +239,7 @@
 
       const apply1DVarPreset = (type, stateArr, setter, min, max, base, count) => {
         const preset = getPresetArray(type, min, max, base, count);
-        const newArr = Array(20).fill(base);
+        const newArr = Array(40).fill(base);
         for(let i=0; i<count; i++) newArr[i] = preset[i];
         setter(newArr);
       };
@@ -280,19 +280,20 @@
           setPillLength(Math.floor(Math.random() * 601) + 400); 
 
           if (mode === 'pattern') {
+            // Give reasonable values on full randomizer to avoid excessive lag during casual clicking
             setPatternRowCount(Math.floor(Math.random() * 8) + 3); 
             setPatternRowSpacing(Math.floor(Math.random() * 400) + 100);
             
-            let newP = Array.from({length: 20}, () => Array(10).fill(true));
-            let newH = Array.from({length: 20}, () => Array(10).fill(true));
-            let newV = Array.from({length: 20}, () => Array(10).fill(false));
+            let newP = Array.from({length: 40}, () => Array(40).fill(true));
+            let newH = Array.from({length: 40}, () => Array(40).fill(true));
+            let newV = Array.from({length: 40}, () => Array(40).fill(false));
             
             const isVMode = Math.random() > 0.5;
             setVerticalModeOn(isVMode);
             
             if (isVMode) {
-              for(let r=0; r<20; r++) {
-                 for(let c=0; c<10; c++) {
+              for(let r=0; r<40; r++) {
+                 for(let c=0; c<40; c++) {
                     newP[r][c] = Math.random() > 0.15;
                     newH[r][c] = Math.random() > 0.1;
                     newV[r][c] = Math.random() > 0.6;
@@ -317,15 +318,15 @@
         setRotation(Math.floor(Math.random() * 8) * 45); 
         setOuterRoundingRatio(1.0);
 
-        let newH = Array.from({length: 20}, () => Array(10).fill(1));
-        let newL = Array.from({length: 20}, () => Array(10).fill(1));
-        let newG = Array.from({length: 20}, () => Array(10).fill(1));
-        let newI = Array.from({length: 20}, () => Array(10).fill(newIncline));
-        let newRS = Array(20).fill(1);
+        let newH = Array.from({length: 40}, () => Array(40).fill(1));
+        let newL = Array.from({length: 40}, () => Array(40).fill(1));
+        let newG = Array.from({length: 40}, () => Array(40).fill(1));
+        let newI = Array.from({length: 40}, () => Array(40).fill(newIncline));
+        let newRS = Array(40).fill(1);
 
         if (isDynamic) {
           const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
-          const rows = mode === 'pattern' ? 20 : 1;
+          const rows = mode === 'pattern' ? 40 : 1;
           const isAlternate = mode === 'pattern' && Math.random() > 0.5;
 
           let pA = presets[Math.floor(Math.random() * presets.length)];
@@ -349,7 +350,7 @@
 
           if (mode === 'pattern') {
              let pRS = presets[Math.floor(Math.random() * presets.length)];
-             newRS = getPresetArray(pRS, 0.3, 2.0, 1, 19);
+             newRS = getPresetArray(pRS, 0.3, 2.0, 1, 39);
           }
         }
 
@@ -390,16 +391,28 @@
       };
 
       const handleResetAllVariations = () => {
-        setVHeights(Array.from({length: 20}, () => Array(10).fill(1)));
-        setVLengths(Array.from({length: 20}, () => Array(10).fill(1)));
-        setVGaps(Array.from({length: 20}, () => Array(10).fill(1)));
-        setVInclines(Array.from({length: 20}, () => Array(10).fill(inclineRatio)));
-        setVRowSpacings(Array(20).fill(1));
+        setVHeights(Array.from({length: 40}, () => Array(40).fill(1)));
+        setVLengths(Array.from({length: 40}, () => Array(40).fill(1)));
+        setVGaps(Array.from({length: 40}, () => Array(40).fill(1)));
+        setVInclines(Array.from({length: 40}, () => Array(40).fill(inclineRatio)));
+        setVRowSpacings(Array(40).fill(1));
       };
 
       const togglePill = (r, c) => { let n = [...gridPills]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridPills(n); };
       const toggleHBridge = (r, c) => { let n = [...gridHBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridHBridges(n); };
       const toggleVBridge = (r, c) => { let n = [...gridVBridges]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridVBridges(n); };
+
+      const handleConnectAll = () => {
+         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(true)));
+      };
+
+      const handleDisconnectAll = () => {
+         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(false)));
+         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(false)));
+      };
 
       const isColorDisabled = (color, target) => {
         if (target === 'bg') return color === shapeSolidColor;
@@ -514,12 +527,37 @@
         const spacing = layoutMode === 'pattern' ? patternRowSpacing : 0;
         const HUGE_EXT = 8000; 
 
+        // 1. Calculate Y positions to dynamically determine max height
+        let cy_arr = [];
+        let y_pos = [];
+        for (let r = 0; r < rows; r++) {
+            if (r === 0) y_pos.push(0);
+            else {
+                let sp = spacing * vRowSpacings[r - 1];
+                y_pos.push(y_pos[r - 1] + sp);
+            }
+        }
+        let center_offset = rows > 1 ? y_pos[rows - 1] / 2 : 0;
+        cy_arr = y_pos.map(y => y - center_offset);
+
+        // 2. Build Grid while enforcing intersection limit rules
         let W_grid = [], H_grid = [], I_grid = [], BL_grid = [];
         for(let r=0; r<rows; r++) {
             let W = [], H_arr = [], I_arr = [], BL = [];
+            
+            // Dynamic Intersection Prevention
+            let max_H = Infinity;
+            if (r > 0) max_H = Math.min(max_H, (cy_arr[r] - cy_arr[r-1]) / 2);
+            if (r < rows - 1) max_H = Math.min(max_H, (cy_arr[r+1] - cy_arr[r]) / 2);
+
             for (let c=0; c<N; c++) {
                 W.push(pillLength * vLengths[r][c]);
-                H_arr.push((pillHeight / 2.0) * vHeights[r][c]);
+                
+                let desired_H = (pillHeight / 2.0) * vHeights[r][c];
+                let safe_H = Math.min(desired_H, max_H - 0.5); // Ensure shapes do not cross center line
+                safe_H = Math.max(h + 0.1, safe_H); // Ensure height is always bigger than the bridge connection to allow rounding
+
+                H_arr.push(safe_H);
                 I_arr.push(vInclines[r][c] * (W[c] / 2));
                 BL.push(bridgeGap * vGaps[r][c]);
             }
@@ -540,18 +578,6 @@
             cx_grid.push(row_cx);
         }
 
-        let cy_arr = [];
-        let y_pos = [];
-        for (let r = 0; r < rows; r++) {
-            if (r === 0) y_pos.push(0);
-            else {
-                let sp = spacing * vRowSpacings[r - 1];
-                y_pos.push(y_pos[r - 1] + sp);
-            }
-        }
-        let center_offset = rows > 1 ? y_pos[rows - 1] / 2 : 0;
-        cy_arr = y_pos.map(y => y - center_offset);
-
         let next = new Map();
         let coords = new Map();
 
@@ -566,7 +592,7 @@
                 let cx = cx_grid[r][c];
                 let cy = cy_arr[r];
                 let W = W_grid[r][c];
-                let H = Math.max(h + 0.1, H_grid[r][c]);
+                let H = H_grid[r][c];
                 let inc = I_grid[r][c];
                 let h_bridge = h;
 
@@ -972,7 +998,7 @@
                           <label className="text-xs font-semibold text-neutral-700">Amount of Shapes</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{lineCount}</span>
                         </div>
-                        <input type="range" min="1" max="8" step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'pattern' ? 40 : 8} step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
 
@@ -982,7 +1008,7 @@
                           <label className="text-xs font-semibold text-neutral-700">Amount of Rows</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{patternRowCount}</span>
                         </div>
-                        <input type="range" min="1" max="20" step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max="40" step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
 
@@ -1073,47 +1099,53 @@
                           </button>
                         </div>
                         {verticalModeOn && (
-                          <div className="bg-neutral-50 p-4 rounded-xl border border-neutral-200 overflow-x-auto hide-scrollbar">
-                             <div className="grid gap-y-3 gap-x-2 w-max mx-auto" style={{ gridTemplateColumns: `repeat(${lineCount * 2 - 1}, auto)` }}>
-                                {Array(patternRowCount).fill(0).map((_, r) => (
-                                   <React.Fragment key={`row-${r}`}>
-                                      {/* Pill & H-Bridge Row */}
-                                      {Array(lineCount).fill(0).map((_, c) => (
-                                         <React.Fragment key={`p-${r}-${c}`}>
-                                            <div className="flex justify-center items-center w-4 h-4">
-                                               <button
-                                                 onClick={() => togglePill(r, c)}
-                                                 className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`}
-                                                 title="Toggle Shape"
-                                               />
-                                            </div>
-                                            {c < lineCount - 1 && (
-                                               <div className="flex justify-center items-center w-6 h-4">
+                          <div className="bg-neutral-50 py-6 px-2 rounded-xl border border-neutral-200 overflow-x-auto hide-scrollbar flex flex-col items-center">
+                             <div className="flex gap-2 justify-center mb-6 w-full">
+                                <button onClick={handleConnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect All</button>
+                                <button onClick={handleDisconnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Disconnect All</button>
+                             </div>
+                             <div className="origin-top flex justify-center" style={{ transform: 'scale(0.7)' }}>
+                                <div className="grid gap-y-3 gap-x-2 w-max mx-auto" style={{ gridTemplateColumns: `repeat(${lineCount * 2 - 1}, auto)` }}>
+                                   {Array(patternRowCount).fill(0).map((_, r) => (
+                                      <React.Fragment key={`row-${r}`}>
+                                         {/* Pill & H-Bridge Row */}
+                                         {Array(lineCount).fill(0).map((_, c) => (
+                                            <React.Fragment key={`p-${r}-${c}`}>
+                                               <div className="flex justify-center items-center w-4 h-4">
                                                   <button
-                                                    onClick={() => toggleHBridge(r, c)}
-                                                    className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
-                                                    title="Toggle Horizontal Bridge"
+                                                    onClick={() => togglePill(r, c)}
+                                                    className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`}
+                                                    title="Toggle Shape"
                                                   />
                                                </div>
-                                            )}
-                                         </React.Fragment>
-                                      ))}
-                                      
-                                      {/* Vertical Bridge Row */}
-                                      {r < patternRowCount - 1 && Array(lineCount).fill(0).map((_, c) => (
-                                         <React.Fragment key={`v-${r}-${c}`}>
-                                            <div className="flex justify-center items-center w-4 h-6">
-                                               <button
-                                                 onClick={() => toggleVBridge(r, c)}
-                                                 className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
-                                                 title="Toggle Vertical Bridge"
-                                               />
-                                            </div>
-                                            {c < lineCount - 1 && <div className="w-6 h-6" />}
-                                         </React.Fragment>
-                                      ))}
-                                   </React.Fragment>
-                                ))}
+                                               {c < lineCount - 1 && (
+                                                  <div className="flex justify-center items-center w-6 h-4">
+                                                     <button
+                                                       onClick={() => toggleHBridge(r, c)}
+                                                       className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
+                                                       title="Toggle Horizontal Bridge"
+                                                     />
+                                                  </div>
+                                               )}
+                                            </React.Fragment>
+                                         ))}
+                                         
+                                         {/* Vertical Bridge Row */}
+                                         {r < patternRowCount - 1 && Array(lineCount).fill(0).map((_, c) => (
+                                            <React.Fragment key={`v-${r}-${c}`}>
+                                               <div className="flex justify-center items-center w-4 h-6">
+                                                  <button
+                                                    onClick={() => toggleVBridge(r, c)}
+                                                    className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`}
+                                                    title="Toggle Vertical Bridge"
+                                                  />
+                                               </div>
+                                               {c < lineCount - 1 && <div className="w-6 h-6" />}
+                                            </React.Fragment>
+                                         ))}
+                                      </React.Fragment>
+                                   ))}
+                                </div>
                              </div>
                           </div>
                         )}

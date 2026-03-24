@@ -251,10 +251,12 @@
       };
 
       const handleRandomiseColors = () => {
-        const rBg = palette[Math.floor(Math.random() * palette.length)];
+        const bgIdx = Math.floor(Math.random() * palette.length);
+        const rBg = palette[bgIdx];
         setBgColor(rBg);
-        const filteredPalette = palette.filter(c => c !== rBg);
-        setShapeSolidColor(filteredPalette[Math.floor(Math.random() * filteredPalette.length)]);
+        const validFg = palette.filter((_, idx) => Math.abs(idx - bgIdx) >= 2);
+        const rFg = validFg[Math.floor(Math.random() * validFg.length)];
+        setShapeSolidColor(rFg);
       };
 
       const handleRandomise = (isDynamic) => {
@@ -273,7 +275,7 @@
           setRoundingRatio(Math.random() * 0.20 + 0.80); 
           setVBridgeRoundingRatio(Math.random() * 0.50 + 0.50); 
           setBridgeGap(Math.floor(Math.random() * 641) + 160); 
-          const pH = Math.floor(Math.random() * 401); 
+          const pH = Math.floor(Math.random() * 321) + 80; 
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
@@ -308,14 +310,14 @@
           newIncline = Math.random() * 0.50 + 0.30; 
           setRoundingRatio(Math.random() * 0.40 + 0.60); 
           setLoopFillRatio(Math.random() * 0.70 + 0.20); 
-          const pH = Math.floor(Math.random() * 201); 
+          const pH = Math.floor(Math.random() * 121) + 80; 
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
         }
 
         setInclineRatio(newIncline);
-        setRotation(Math.floor(Math.random() * 8) * 45); 
+        setRotation(0); 
         setOuterRoundingRatio(1.0);
 
         let newH = Array.from({length: 40}, () => Array(40).fill(1));
@@ -332,13 +334,13 @@
           let pA = presets[Math.floor(Math.random() * presets.length)];
           let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
           let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
-          let arrA_I = getPresetArray(pA, 0.0, 1.0, newIncline, newShapeCount);
+          let arrA_I = getPresetArray(pA, 0.0, 0.9, newIncline, newShapeCount);
           let arrA_G = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
 
           let pB = presets[Math.floor(Math.random() * presets.length)];
           let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_H;
           let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_L;
-          let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 1.0, newIncline, newShapeCount) : arrA_I;
+          let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, newIncline, newShapeCount) : arrA_I;
           let arrB_G = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_G;
 
           for(let r=0; r<rows; r++) {
@@ -366,13 +368,13 @@
         let pA = presets[Math.floor(Math.random() * presets.length)];
         let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
         let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
-        let arrA_I = getPresetArray(pA, 0.0, 1.0, inclineRatio, shapeCount);
+        let arrA_I = getPresetArray(pA, 0.0, 0.9, inclineRatio, shapeCount);
         let arrA_G = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
 
         let pB = presets[Math.floor(Math.random() * presets.length)];
         let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_H;
         let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_L;
-        let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 1.0, inclineRatio, shapeCount) : arrA_I;
+        let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, inclineRatio, shapeCount) : arrA_I;
         let arrB_G = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_G;
 
         let newH = [...vHeights], newL = [...vLengths], newG = [...vGaps], newI = [...vInclines];
@@ -414,9 +416,33 @@
          setGridVBridges(Array.from({length: 40}, () => Array(40).fill(false)));
       };
 
+      const handleConnectRows = () => {
+         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(false)));
+      };
+
+      const handleConnectCols = () => {
+         setGridPills(Array.from({length: 40}, () => Array(40).fill(true)));
+         setGridHBridges(Array.from({length: 40}, () => Array(40).fill(false)));
+         setGridVBridges(Array.from({length: 40}, () => Array(40).fill(true)));
+      };
+
       const isColorDisabled = (color, target) => {
-        if (target === 'bg') return color === shapeSolidColor;
-        if (target === 'shapeSolid') return color === bgColor;
+        const bgIdx = palette.indexOf(bgColor);
+        const fgIdx = palette.indexOf(shapeSolidColor);
+        const colorIdx = palette.indexOf(color);
+
+        if (colorIdx === -1) return false;
+
+        if (target === 'bg') {
+          if (fgIdx === -1) return color === shapeSolidColor;
+          return Math.abs(colorIdx - fgIdx) < 2;
+        }
+        if (target === 'shapeSolid') {
+          if (bgIdx === -1) return color === bgColor;
+          return Math.abs(colorIdx - bgIdx) < 2;
+        }
         return false;
       };
 
@@ -1043,12 +1069,12 @@
                           <label className="text-xs font-semibold text-neutral-700">Shape Incline (Edges)</label>
                           <p className="text-[10px] text-neutral-500">0% Rectangles → 100% Diamonds</p>
                         </div>
-                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(inclineRatio * 100)}%</span>
+                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round((inclineRatio / 0.9) * 100)}%</span>
                       </div>
                       <input 
                         type="range" 
                         min="0" 
-                        max="1" 
+                        max="0.9" 
                         step="0.01" 
                         value={inclineRatio} 
                         onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} 
@@ -1086,7 +1112,7 @@
                     <div className="grid grid-cols-3 gap-2 pt-2">
                       <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
                       <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
-                      <button onClick={() => { handleGlobalIncline(1); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
+                      <button onClick={() => { handleGlobalIncline(0.9); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
                     </div>
 
                     {/* 8. Vertical Connections Toggle & Grid (Pattern Only) */}
@@ -1100,9 +1126,11 @@
                         </div>
                         {verticalModeOn && (
                           <div className="bg-neutral-50 py-6 px-2 rounded-xl border border-neutral-200 overflow-x-auto hide-scrollbar flex flex-col items-center">
-                             <div className="flex gap-2 justify-center mb-6 w-full">
+                             <div className="flex gap-2 justify-center mb-6 w-full flex-wrap">
                                 <button onClick={handleConnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect All</button>
                                 <button onClick={handleDisconnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Disconnect All</button>
+                                <button onClick={handleConnectRows} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Rows</button>
+                                <button onClick={handleConnectCols} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Cols</button>
                              </div>
                              <div className="origin-top flex justify-center" style={{ transform: 'scale(0.7)' }}>
                                 <div className="grid gap-y-3 gap-x-2 w-max mx-auto" style={{ gridTemplateColumns: `repeat(${lineCount * 2 - 1}, auto)` }}>
@@ -1246,7 +1274,7 @@
                         <label className="text-xs font-medium text-neutral-600">Base Pill Height</label>
                         <span className="text-xs text-neutral-400 font-mono">{pillHeight}</span>
                       </div>
-                      <input type="range" min="0" max="400" step="1" value={pillHeight} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                      <input type="range" min="80" max="400" step="1" value={pillHeight} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
 
                     <div>
@@ -1298,11 +1326,11 @@
                       <div key={r} className="mb-4 mt-2">
                         {layoutMode === 'pattern' && <h4 className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-1 mt-4">Row {r + 1}</h4>}
                         {activeVarTab === 'height' && renderVarSliders('Height', vHeights, setVHeights, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'height', r)}
-                        {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length', r)}
-                        {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 1.0, 0.01, v => `${Math.round(v*100)}%`, 'incline', r)}
-                        {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap', r)}
-                      </div>
-                    ))}
+                    {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length', r)}
+                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 0.9, 0.01, v => `${Math.round((v/0.9)*100)}%`, 'incline', r)}
+                    {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap', r)}
+                  </div>
+                ))}
                   </div>
                 )}
               </div>
@@ -1438,7 +1466,7 @@
 
                     {activeVarTab === 'height' && renderVarSliders('Height', vHeights, setVHeights, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'height', selectedRow, true)}
                     {activeVarTab === 'length' && renderVarSliders('Length', vLengths, setVLengths, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'length', selectedRow, true)}
-                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 1.0, 0.01, v => `${Math.round(v*100)}%`, 'incline', selectedRow, true)}
+                    {activeVarTab === 'incline' && renderVarSliders('Incline', vInclines, setVInclines, 0.0, 0.9, 0.01, v => `${Math.round((v/0.9)*100)}%`, 'incline', selectedRow, true)}
                     {activeVarTab === 'gap' && renderVarSliders('Left Gap', vGaps, setVGaps, 0.3, 2.0, 0.01, v => `${Math.round(v*100)}%`, 'gap', selectedRow, true)}
                   </div>
                 </div>

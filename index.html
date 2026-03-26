@@ -132,7 +132,8 @@
       roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
       loopFillRatio, rotation, infiniteEdges, verticalModeOn,
       vLengths, vHeights, vInclines, vGaps, vRowSpacings,
-      gridPills, gridHBridges, gridVBridges, halftonePixels
+      gridPills, gridHBridges, gridVBridges, halftonePixels,
+      waveFrequency, waveAmplitude, followWave
     }) => {
       let pathDataArray = [];
       let viewBox = "";
@@ -219,7 +220,7 @@
                     if (r > 0) max_H = Math.min(max_H, (cy_arr[r] - cy_arr[r-1]) / 2);
                     if (r < rows - 1) max_H = Math.min(max_H, (cy_arr[r+1] - cy_arr[r]) / 2);
 
-                    let newH = (pillHeight / 2.0) * (dotScale * 1.5); // Boost scale slightly
+                    let newH = (pillHeight / 2.0) * (dotScale * 1.5);
                     H_grid[r][c] = Math.max(h + 0.1, Math.min(newH, max_H - 0.5));
                     
                     if (dotScale < 0.10) activePillMask[r][c] = false;
@@ -235,8 +236,26 @@
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < N; c++) {
                 let cx = cx_grid[r][c], cy = cy_arr[r];
+                let angleRad = 0;
+
+                if (layoutMode === 'line') {
+                    let startX = cx_grid[r][0];
+                    let totalLength = cx_grid[r][N - 1] - startX;
+                    if (totalLength === 0) totalLength = 1;
+                    let normX = (cx - startX) / totalLength;
+                    
+                    cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+
+                    if (followWave) {
+                        let derivative = waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength);
+                        angleRad = Math.atan(derivative);
+                    }
+                }
+
+                let cosA = Math.cos(angleRad);
+                let sinA = Math.sin(angleRad);
+
                 let W = W_grid[r][c], H = H_grid[r][c], inc = I_grid[r][c], h_bridge = h;
-                let pts = {};
                 let isPillOn = (!vMode || gridPills[r][c]) && activePillMask[r][c];
 
                 let hasN = vMode && r > 0 && gridVBridges[r-1][c] && activePillMask[r-1][c] && activePillMask[r][c];
@@ -249,6 +268,7 @@
                 let cutW = !hasW && !(infiniteEdges && c === 0);
                 let cutE = !hasE && !(infiniteEdges && c === N - 1);
 
+                let local_pts = {};
                 if (isPillOn) {
                     let get_y = (dx) => {
                         if (inc <= 0.001) return -H;
@@ -265,34 +285,45 @@
                             return -H + Math.max(0, Math.min(1, t)) * (-h_bridge - (-H));
                         }
                     };
-                    pts.W_T = {x: cx - W/2 + inc*(h_bridge/H), y: cy - h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
-                    pts.NW  = {x: cx - W/2 + inc, y: cy - H, isOuterCutoff: cutW};
-                    pts.N_L = {x: cx - h_bridge, y: cy + get_y(-h_bridge), isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
-                    pts.N_R = {x: cx + h_bridge, y: cy + get_y(h_bridge), isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
-                    pts.NE  = {x: cx + W/2 - inc, y: cy - H, isOuterCutoff: cutE};
-                    pts.E_T = {x: cx + W/2 - inc*(h_bridge/H), y: cy - h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
-                    pts.E_B = {x: cx + W/2 - inc*(h_bridge/H), y: cy + h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
-                    pts.SE  = {x: cx + W/2 - inc, y: cy + H, isOuterCutoff: cutE};
-                    pts.S_R = {x: cx + h_bridge, y: cy - get_y(h_bridge), isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
-                    pts.S_L = {x: cx - h_bridge, y: cy - get_y(-h_bridge), isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
-                    pts.SW  = {x: cx - W/2 + inc, y: cy + H, isOuterCutoff: cutW};
-                    pts.W_B = {x: cx - W/2 + inc*(h_bridge/H), y: cy + h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
+                    local_pts.W_T = {x: -W/2 + inc*(h_bridge/H), y: -h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
+                    local_pts.NW  = {x: -W/2 + inc, y: -H, isOuterCutoff: cutW};
+                    local_pts.N_L = {x: -h_bridge, y: get_y(-h_bridge), isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
+                    local_pts.N_R = {x: h_bridge, y: get_y(h_bridge), isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
+                    local_pts.NE  = {x: W/2 - inc, y: -H, isOuterCutoff: cutE};
+                    local_pts.E_T = {x: W/2 - inc*(h_bridge/H), y: -h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
+                    local_pts.E_B = {x: W/2 - inc*(h_bridge/H), y: h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
+                    local_pts.SE  = {x: W/2 - inc, y: H, isOuterCutoff: cutE};
+                    local_pts.S_R = {x: h_bridge, y: -get_y(h_bridge), isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
+                    local_pts.S_L = {x: -h_bridge, y: -get_y(-h_bridge), isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
+                    local_pts.SW  = {x: -W/2 + inc, y: H, isOuterCutoff: cutW};
+                    local_pts.W_B = {x: -W/2 + inc*(h_bridge/H), y: h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
                 } else {
-                    pts.W_T = {x: cx - h_bridge, y: cy - h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
-                    pts.NW  = {x: cx - h_bridge, y: cy - h_bridge, isOuterCutoff: cutW};
-                    pts.N_L = {x: cx - h_bridge, y: cy - h_bridge, isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
-                    pts.N_R = {x: cx + h_bridge, y: cy - h_bridge, isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
-                    pts.NE  = {x: cx + h_bridge, y: cy - h_bridge, isOuterCutoff: cutE};
-                    pts.E_T = {x: cx + h_bridge, y: cy - h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
-                    pts.E_B = {x: cx + h_bridge, y: cy + h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
-                    pts.SE  = {x: cx + h_bridge, y: cy + h_bridge, isOuterCutoff: cutE};
-                    pts.S_R = {x: cx + h_bridge, y: cy + h_bridge, isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
-                    pts.S_L = {x: cx - h_bridge, y: cy + h_bridge, isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
-                    pts.SW  = {x: cx - h_bridge, y: cy + h_bridge, isOuterCutoff: cutW};
-                    pts.W_B = {x: cx - h_bridge, y: cy + h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
+                    local_pts.W_T = {x: -h_bridge, y: -h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
+                    local_pts.NW  = {x: -h_bridge, y: -h_bridge, isOuterCutoff: cutW};
+                    local_pts.N_L = {x: -h_bridge, y: -h_bridge, isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
+                    local_pts.N_R = {x: h_bridge, y: -h_bridge, isBridgeCorner: hasN, isVBridgeCorner: hasN, isOuterCutoff: !hasN};
+                    local_pts.NE  = {x: h_bridge, y: -h_bridge, isOuterCutoff: cutE};
+                    local_pts.E_T = {x: h_bridge, y: -h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
+                    local_pts.E_B = {x: h_bridge, y: h_bridge, isBridgeCorner: hasE, isOuterCutoff: cutE};
+                    local_pts.SE  = {x: h_bridge, y: h_bridge, isOuterCutoff: cutE};
+                    local_pts.S_R = {x: h_bridge, y: h_bridge, isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
+                    local_pts.S_L = {x: -h_bridge, y: h_bridge, isBridgeCorner: hasS, isVBridgeCorner: hasS, isOuterCutoff: !hasS};
+                    local_pts.SW  = {x: -h_bridge, y: h_bridge, isOuterCutoff: cutW};
+                    local_pts.W_B = {x: -h_bridge, y: h_bridge, isBridgeCorner: hasW, isOuterCutoff: cutW};
                 }
                 
-                for (let k in pts) coords.set(`${r},${c},${k}`, pts[k]);
+                let pts = {};
+                for (let k in local_pts) {
+                    let p = local_pts[k];
+                    pts[k] = {
+                        x: cx + p.x * cosA - p.y * sinA,
+                        y: cy + p.x * sinA + p.y * cosA,
+                        isBridgeCorner: p.isBridgeCorner,
+                        isOuterCutoff: p.isOuterCutoff,
+                        isVBridgeCorner: p.isVBridgeCorner
+                    };
+                    coords.set(`${r},${c},${k}`, pts[k]);
+                }
 
                 if (isPillOn) {
                     if (pts.N_L.x <= pts.NW.x) addLink(r, c, 'W_T', r, c, 'N_L');
@@ -313,11 +344,13 @@
                     addLink(r, c, 'S_L', r, c, 'W_B');
                 }
 
-                if (hasE) addLink(r, c, 'E_T', r, c+1, 'W_T');
-                else {
+                if (hasE) {
+                    addLink(r, c, 'E_T', r, c+1, 'W_T');
+                } else {
                     if (infiniteEdges && c === N - 1) {
-                        coords.set(`${r},${c},Out_ET`, {x: cx + W/2 + HUGE_EXT, y: cy - h_bridge, isBridgeCorner: true});
-                        coords.set(`${r},${c},Out_EB`, {x: cx + W/2 + HUGE_EXT, y: cy + h_bridge, isBridgeCorner: true});
+                        let capX = W/2 + HUGE_EXT;
+                        coords.set(`${r},${c},Out_ET`, {x: cx + capX * cosA - (-h_bridge) * sinA, y: cy + capX * sinA + (-h_bridge) * cosA, isBridgeCorner: true});
+                        coords.set(`${r},${c},Out_EB`, {x: cx + capX * cosA - (h_bridge) * sinA, y: cy + capX * sinA + (h_bridge) * cosA, isBridgeCorner: true});
                         addLink(r, c, 'E_T', r, c, 'Out_ET');
                         addLink(r, c, 'Out_ET', r, c, 'Out_EB');
                         addLink(r, c, 'Out_EB', r, c, 'E_B');
@@ -325,19 +358,23 @@
                         pts.E_B.isBridgeCorner = true;
                     } else {
                         if (inc > 0.001) {
-                            let capX = isPillOn ? cx + W/2 : cx + h_bridge;
-                            coords.set(`${r},${c},Out_E`, {x: capX, y: cy, isOuterCutoff: true});
+                            let capX = isPillOn ? W/2 : h_bridge;
+                            coords.set(`${r},${c},Out_E`, {x: cx + capX * cosA, y: cy + capX * sinA, isOuterCutoff: true});
                             addLink(r, c, 'E_T', r, c, 'Out_E');
                             addLink(r, c, 'Out_E', r, c, 'E_B');
-                        } else addLink(r, c, 'E_T', r, c, 'E_B');
+                        } else {
+                            addLink(r, c, 'E_T', r, c, 'E_B');
+                        }
                     }
                 }
 
-                if (hasW) addLink(r, c, 'W_B', r, c-1, 'E_B');
-                else {
+                if (hasW) {
+                    addLink(r, c, 'W_B', r, c-1, 'E_B');
+                } else {
                     if (infiniteEdges && c === 0) {
-                        coords.set(`${r},${c},Out_WB`, {x: cx - W/2 - HUGE_EXT, y: cy + h_bridge, isBridgeCorner: true});
-                        coords.set(`${r},${c},Out_WT`, {x: cx - W/2 - HUGE_EXT, y: cy - h_bridge, isBridgeCorner: true});
+                        let capX = -W/2 - HUGE_EXT;
+                        coords.set(`${r},${c},Out_WB`, {x: cx + capX * cosA - (h_bridge) * sinA, y: cy + capX * sinA + (h_bridge) * cosA, isBridgeCorner: true});
+                        coords.set(`${r},${c},Out_WT`, {x: cx + capX * cosA - (-h_bridge) * sinA, y: cy + capX * sinA + (-h_bridge) * cosA, isBridgeCorner: true});
                         addLink(r, c, 'W_B', r, c, 'Out_WB');
                         addLink(r, c, 'Out_WB', r, c, 'Out_WT');
                         addLink(r, c, 'Out_WT', r, c, 'W_T');
@@ -345,11 +382,13 @@
                         pts.W_T.isBridgeCorner = true;
                     } else {
                         if (inc > 0.001) {
-                            let capX = isPillOn ? cx - W/2 : cx - h_bridge;
-                            coords.set(`${r},${c},Out_W`, {x: capX, y: cy, isOuterCutoff: true});
+                            let capX = isPillOn ? -W/2 : -h_bridge;
+                            coords.set(`${r},${c},Out_W`, {x: cx + capX * cosA, y: cy + capX * sinA, isOuterCutoff: true});
                             addLink(r, c, 'W_B', r, c, 'Out_W');
                             addLink(r, c, 'Out_W', r, c, 'W_T');
-                        } else addLink(r, c, 'W_B', r, c, 'W_T');
+                        } else {
+                            addLink(r, c, 'W_B', r, c, 'W_T');
+                        }
                     }
                 }
 
@@ -361,10 +400,13 @@
             }
         }
 
-        let visited = new Set(), loops = [];
+        let visited = new Set();
+        let loops = [];
         for (let startKey of next.keys()) {
             if (!visited.has(startKey)) {
-                let loop = [], curr = startKey, failsafe = 0;
+                let loop = [];
+                let curr = startKey;
+                let failsafe = 0;
                 while (!visited.has(curr) && failsafe < 5000) {
                     visited.add(curr);
                     let p = coords.get(curr);
@@ -377,19 +419,43 @@
         }
 
         for (let loop of loops) {
-            pathDataArray.push(roundPolygon(cleanPoly(rotatePoints(loop, rotation)), roundingRatio, { h: h, maxT: bridgeGap / 2.0 }, outerRoundingRatio, vBridgeRoundingRatio));
+            const rotated = rotatePoints(loop, rotation);
+            pathDataArray.push(roundPolygon(cleanPoly(rotated), roundingRatio, { h: h, maxT: bridgeGap / 2.0 }, outerRoundingRatio, vBridgeRoundingRatio));
         }
 
         minX = Infinity; maxX = -Infinity; minY = Infinity; maxY = -Infinity;
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < N; c++) {
                 let W = W_grid[r][c], H = H_grid[r][c];
+                let cx = cx_grid[r][c], cy = cy_arr[r];
+                let angleRad = 0;
+
+                if (layoutMode === 'line') {
+                    let startX = cx_grid[r][0];
+                    let totalLength = cx_grid[r][N - 1] - startX;
+                    if (totalLength === 0) totalLength = 1;
+                    let normX = (cx - startX) / totalLength;
+                    cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+
+                    if (followWave) {
+                        let derivative = waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength);
+                        angleRad = Math.atan(derivative);
+                    }
+                }
+
                 if (!activePillMask[r][c]) continue;
                 if (vMode && !gridPills[r][c]) continue; 
-                let corners = [
-                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] - H}, {x: cx_grid[r][c] + W/2, y: cy_arr[r] - H},
-                    {x: cx_grid[r][c] - W/2, y: cy_arr[r] + H}, {x: cx_grid[r][c] + W/2, y: cy_arr[r] + H}
+
+                let cosA = Math.cos(angleRad), sinA = Math.sin(angleRad);
+                let local_corners = [
+                    {x: -W/2, y: -H}, {x: W/2, y: -H},
+                    {x: -W/2, y: H}, {x: W/2, y: H}
                 ];
+                let corners = local_corners.map(p => ({
+                    x: cx + p.x * cosA - p.y * sinA,
+                    y: cy + p.x * sinA + p.y * cosA
+                }));
+
                 rotatePoints(corners, rotation).forEach(p => {
                     minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
                     minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
@@ -527,6 +593,10 @@
       const [infiniteEdges, setInfiniteEdges] = useState(true);
       const [outerRoundingRatio, setOuterRoundingRatio] = useState(1.0);
       const [verticalModeOn, setVerticalModeOn] = useState(false);
+      
+      const [waveFrequency, setWaveFrequency] = useState(0);
+      const [waveAmplitude, setWaveAmplitude] = useState(0);
+      const [followWave, setFollowWave] = useState(false);
 
       // Halftone specific
       const [halftonePixels, setHalftonePixels] = useState(generateDefaultHalftone());
@@ -569,7 +639,7 @@
       // UI State
       const [showCode, setShowCode] = useState(false);
       const [copyStatus, setCopyStatus] = useState('');
-      const [coreOpen, setCoreOpen] = useState(false);
+      const [coreOpen, setCoreOpen] = useState(true);
       const [dimenOpen, setDimenOpen] = useState(false);
       const [varOpen, setVarOpen] = useState(false);
       const [colorsOpen, setColorsOpen] = useState(false);
@@ -687,8 +757,45 @@
         setShapeSolidColor(validFg[Math.floor(Math.random() * validFg.length)]);
       };
 
+      const handleResetAll = () => {
+        setLayoutMode('line');
+        setLineCount(3);
+        setLoopCount(6);
+        setPatternRowCount(5);
+        setInclineRatio(0.20);
+        setRoundingRatio(1.0);
+        setVBridgeRoundingRatio(1.0);
+        setRotation(0);
+        setInfiniteEdges(true);
+        setOuterRoundingRatio(1.0);
+        setVerticalModeOn(false);
+        setPillLength(450);
+        setBridgeGap(180);
+        setPillHeight(160);
+        setBridgeThickness(4);
+        setPatternRowSpacing(250);
+        setLoopFillRatio(0.65);
+        setWaveFrequency(0);
+        setWaveAmplitude(0);
+        setFollowWave(false);
+
+        setGridPills(createGrid(80, 40, true));
+        setGridHBridges(createGrid(80, 40, true));
+        setGridVBridges(createGrid(80, 40, false));
+
+        setVRowSpacings(Array(80).fill(1));
+        setVHeights(createGrid(80, 40, 1));
+        setVLengths(createGrid(80, 40, 1));
+        setVGaps(createGrid(80, 40, 1));
+        setVInclines(createGrid(80, 40, 0.20));
+
+        setBgColor('#D9D2F6');
+        setShapeSolidColor('#3E2568');
+        setSelectedRow(null);
+      };
+
       const handleRandomise = (isDynamic) => {
-        const modeList = ['line', 'loop', 'pattern']; // Kept Halftone out of full randomizer so user doesn't lose image context
+        const modeList = ['line', 'loop', 'pattern']; 
         const mode = modeList[Math.floor(Math.random() * modeList.length)];
         setLayoutMode(mode);
         setSelectedRow(null);
@@ -697,6 +804,7 @@
 
         let newIncline = 0.20;
         let newShapeCount = shapeCount;
+        let newWaveFreq = 0;
 
         if (mode === 'line' || mode === 'pattern') {
           newShapeCount = Math.floor(Math.random() * (mode === 'pattern' ? 10 : 8)) + 1;
@@ -718,6 +826,20 @@
             setGridPills(createGrid(80, 40, true)); 
             setGridHBridges(createGrid(80, 40, true)); 
             setGridVBridges(createGrid(80, 40, false));
+            setWaveFrequency(0);
+            setWaveAmplitude(0);
+            setFollowWave(false);
+          } else if (mode === 'line') {
+             if (Math.random() > 0.5) {
+                newWaveFreq = Math.floor(Math.random() * 5) + 1;
+                setWaveFrequency(newWaveFreq);
+                setWaveAmplitude(Math.floor(Math.random() * 400) + 100);
+                setFollowWave(Math.random() > 0.5);
+             } else {
+                setWaveFrequency(0);
+                setWaveAmplitude(0);
+                setFollowWave(false);
+             }
           }
         } else if (mode === 'loop') {
           newShapeCount = Math.floor(Math.random() * 8) + 3;
@@ -729,14 +851,18 @@
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
+          setWaveFrequency(0);
+          setWaveAmplitude(0);
+          setFollowWave(false);
         }
 
         setInclineRatio(newIncline);
         setRotation(0); 
         setOuterRoundingRatio(1.0);
 
-        let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1), nG = createGrid(80, 40, 1), nI = createGrid(80, 40, newIncline);
+        let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1), nI = createGrid(80, 40, newIncline);
         let nRS = Array(80).fill(1);
+        let nG = [...vGaps]; 
 
         if (isDynamic) {
           const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
@@ -747,24 +873,21 @@
           let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
           let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
           let arrA_I = getPresetArray(pA, 0.0, 0.9, newIncline, newShapeCount);
-          let arrA_G = Array(40).fill(1); 
 
           let pB = presets[Math.floor(Math.random() * presets.length)];
           let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_H;
           let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_L;
           let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, newIncline, newShapeCount) : arrA_I;
-          let arrB_G = Array(40).fill(1); 
 
           for(let r=0; r<rows; r++) {
               nH[r] = r % 2 === 0 ? arrA_H : arrB_H;
               nL[r] = r % 2 === 0 ? arrA_L : arrB_L;
               nI[r] = r % 2 === 0 ? arrA_I : arrB_I;
-              nG[r] = r % 2 === 0 ? arrA_G : arrB_G;
           }
           if (mode === 'pattern') nRS = getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, 39);
         }
 
-        setVHeights(nH); setVLengths(nL); setVGaps(nG); setVInclines(nI); setVRowSpacings(nRS);
+        setVHeights(nH); setVLengths(nL); setVInclines(nI); setVRowSpacings(nRS);
         handleRandomiseColors();
       };
 
@@ -828,7 +951,8 @@
         roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
         loopFillRatio, rotation, infiniteEdges, verticalModeOn,
         vLengths, vHeights, vInclines, vGaps, vRowSpacings,
-        gridPills, gridHBridges, gridVBridges, halftonePixels
+        gridPills, gridHBridges, gridVBridges, halftonePixels,
+        waveFrequency, waveAmplitude, followWave
       });
 
       const svgPathsMarkup = verticalModeOn || layoutMode !== 'pattern' 
@@ -934,8 +1058,6 @@
                 <button onClick={() => handleLayoutMode('line')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'line' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Route" size={14} /> Line</button>
                 <button onClick={() => handleLayoutMode('loop')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'loop' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Repeat" size={14} /> Loop</button>
                 <button onClick={() => handleLayoutMode('pattern')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'pattern' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Grid" size={14} /> Pattern</button>
-                {/* Halftone mode hidden for now */}
-                {/* <button onClick={() => handleLayoutMode('halftone')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'halftone' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Image" size={14} /> Halftone</button> */}
               </div>
 
               <div>
@@ -946,14 +1068,6 @@
                 
                 {coreOpen && (
                   <div className="mt-4 space-y-6">
-                    {layoutMode === 'halftone' && (
-                      <div className="flex flex-col gap-2 p-3 bg-neutral-50 border border-neutral-200 rounded-lg">
-                        <label className="text-xs font-semibold text-neutral-700">Upload Image Mask</label>
-                        <input type="file" accept="image/*" onChange={handleImageUpload} className="text-xs text-neutral-600 file:mr-4 file:py-1 file:px-3 file:rounded-md file:border-0 file:text-[10px] file:uppercase file:font-bold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 cursor-pointer" />
-                        <p className="text-[10px] text-neutral-500 mt-1 leading-tight">Darker image areas will generate thicker, overlapping shapes. Brighter areas will shrink or remove shapes.</p>
-                      </div>
-                    )}
-
                     {layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between items-end mb-2">
@@ -973,6 +1087,40 @@
                         <input type="range" min="1" max={layoutMode === 'halftone' ? 80 : 20} step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
+
+                    {layoutMode === 'line' && (
+                      <>
+                        <div>
+                          <div className="flex justify-between items-end mb-2">
+                            <div>
+                              <label className="text-xs font-semibold text-neutral-700">Wave Frequency</label>
+                              <p className="text-[10px] text-neutral-500">Number of bends</p>
+                            </div>
+                            <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveFrequency}</span>
+                          </div>
+                          <input type="range" min="0" max="10" step="0.1" value={waveFrequency} onChange={(e) => setWaveFrequency(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        </div>
+                        <div>
+                          <div className="flex justify-between items-end mb-2">
+                            <div>
+                              <label className="text-xs font-semibold text-neutral-700">Wave Amplitude</label>
+                              <p className="text-[10px] text-neutral-500">Height of the bends</p>
+                            </div>
+                            <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveAmplitude}</span>
+                          </div>
+                          <input type="range" min="0" max="1000" step="10" value={waveAmplitude} onChange={(e) => setWaveAmplitude(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        </div>
+                        <div className="flex items-center justify-between pt-1">
+                          <div>
+                            <span className="text-xs font-semibold text-neutral-700">Rotate following the wave</span>
+                            <p className="text-[10px] text-neutral-500">Align elements to the wave angle</p>
+                          </div>
+                          <button onClick={() => setFollowWave(!followWave)} className={`w-8 h-4 rounded-full relative transition-colors ${followWave ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
+                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${followWave ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
+                      </>
+                    )}
 
                     {layoutMode === 'loop' && (
                       <div>
@@ -1229,8 +1377,9 @@
             {/* Action Buttons (Fixed Bottom) */}
             <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3 shrink-0 flex flex-col gap-2">
               <div className="flex gap-2">
-                <button onClick={() => handleRandomise(false)} className="flex-1 py-2 px-2 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Randomise Uniform</button>
-                <button onClick={() => handleRandomise(true)} className="flex-1 py-2 px-2 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[10px] uppercase tracking-wider font-bold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Randomise Dynamic</button>
+                <button onClick={() => handleRandomise(false)} className="flex-1 py-2 px-1 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Uniform</button>
+                <button onClick={() => handleRandomise(true)} className="flex-1 py-2 px-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Dynamic</button>
+                <button onClick={handleResetAll} className="flex-1 py-2 px-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="RefreshCcw" size={12} /> Reset All</button>
               </div>
               <div className="flex gap-2">
                 <button onClick={handleDownload} className="flex-1 py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow active:scale-[0.98]"><Icon name="Download" size={18} /> Download</button>

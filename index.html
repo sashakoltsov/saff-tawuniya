@@ -30,7 +30,7 @@
   <div id="root"></div>
 
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     // --- Math & Geometry Engine ---
     const rotatePoints = (pts, deg) => {
@@ -133,7 +133,8 @@
       loopFillRatio, rotation, infiniteEdges, verticalModeOn,
       vLengths, vHeights, vInclines, vGaps, vRowSpacings,
       gridPills, gridHBridges, gridVBridges, halftonePixels,
-      waveFrequency, waveAmplitude, followWave, swaps, library
+      waveFrequency, waveAmplitude, followWave, swaps, library,
+      starModeOn, starRatio
     }) => {
       let pathDataArray = [];
       let swapCenters = [];
@@ -162,11 +163,10 @@
 
         if (layoutMode === 'line' && swaps) {
             for (let c = 0; c < N; c++) {
-                if (swaps[c]) activePillMask[0][c] = false; // Hide pill to allow bridge pass-through and shape overlay
+                if (swaps[c]) activePillMask[0][c] = false; 
             }
         }
 
-        // Pass 1: Build Base Grid Metrics
         for(let r=0; r<rows; r++) {
             let W = [], H_arr = [], I_arr = [], BL = [];
             let max_H = Infinity;
@@ -197,7 +197,6 @@
             cx_grid.push(row_cx);
         }
 
-        // Halftone Pass: Override metrics based on luminance
         if (layoutMode === 'halftone' && halftonePixels) {
             let local_min_cx = Infinity, local_max_cx = -Infinity;
             let local_min_cy = Infinity, local_max_cy = -Infinity;
@@ -389,7 +388,7 @@
                         pts.W_T.isBridgeCorner = true;
                     } else {
                         if (inc > 0.001) {
-                            let capX = isPillOn ? -W/2 : -h_bridge;
+                            let capX = isPillOn ? -W/2 : h_bridge;
                             coords.set(`${r},${c},Out_W`, {x: cx + capX * cosA, y: cy + capX * sinA, isOuterCutoff: true});
                             addLink(r, c, 'W_B', r, c, 'Out_W');
                             addLink(r, c, 'Out_W', r, c, 'W_T');
@@ -486,36 +485,125 @@
         if (rotation % 180 === 0) padX = 0; else if (rotation % 180 === 90) padY = 0;
 
       } else if (layoutMode === 'loop') {
-        const N = Math.max(3, shapeCount), A = 300, loopScale = 0.35, h_loop = h * loopScale;
-        const S_out = 2 * (A + h_loop) * Math.tan(Math.PI / N);
-        const S_in  = 2 * (A - h_loop) * Math.tan(Math.PI / N);
-        const S = 2 * A * Math.tan(Math.PI / N), W_base = S * loopFillRatio; 
+        const N = Math.max(3, shapeCount);
+        const isStar = starModeOn;
+        const K = isStar ? N * 2 : N;
+        const A = 300;
+        const R_out = A / Math.cos(Math.PI / N); 
+        const R_in = R_out * starRatio;
+        const h_loop = h * 0.35;
+        const loopScale = 0.35;
+        
+        const V = [];
+        for(let i=0; i<K; i++) {
+          let a = i * 2 * Math.PI / K;
+          let r = (!isStar || i%2 === 0) ? R_out : R_in;
+          V.push({x: r * Math.sin(a), y: -r * Math.cos(a)});
+        }
+
+        const getIntersect = (p1, d1, p2, d2) => {
+          let cross = d1.x * d2.y - d1.y * d2.x;
+          if (Math.abs(cross) < 1e-6) return {x: p1.x, y: p1.y};
+          let t1 = ((p2.x - p1.x) * d2.y - (p2.y - p1.y) * d2.x) / cross;
+          return {x: p1.x + d1.x * t1, y: p1.y + d1.y * t1};
+        };
+
+        const V_out = [], V_in = [];
+        for(let i=0; i<K; i++) {
+          let P = V[(i - 1 + K) % K];
+          let C = V[i];
+          let Nx = V[(i + 1) % K];
+          
+          let dir1 = {x: C.x - P.x, y: C.y - P.y};
+          let l1 = Math.hypot(dir1.x, dir1.y);
+          dir1 = {x: dir1.x/l1, y: dir1.y/l1};
+          let norm1 = {x: dir1.y, y: -dir1.x};
+          
+          let dir2 = {x: Nx.x - C.x, y: Nx.y - C.y};
+          let l2 = Math.hypot(dir2.x, dir2.y);
+          dir2 = {x: dir2.x/l2, y: dir2.y/l2};
+          let norm2 = {x: dir2.y, y: -dir2.x};
+          
+          let p1_out = {x: P.x + norm1.x * h_loop, y: P.y + norm1.y * h_loop};
+          let p2_out = {x: C.x + norm2.x * h_loop, y: C.y + norm2.y * h_loop};
+          V_out.push(getIntersect(p1_out, dir1, p2_out, dir2));
+
+          let p1_in = {x: P.x - norm1.x * h_loop, y: P.y - norm1.y * h_loop};
+          let p2_in = {x: C.x - norm2.x * h_loop, y: C.y - norm2.y * h_loop};
+          V_in.push(getIntersect(p1_in, dir1, p2_in, dir2));
+        }
 
         let outer_pts = [], inner_pts = [];
-        for (let i = 0; i < N; i++) {
-          let theta = i * (2 * Math.PI / N), cos = Math.cos(theta), sin = Math.sin(theta);
-          let w_i = Math.min(S * 0.95, W_base * vLengths[0][i]);
-          let ht = Math.max(h_loop + 0.1, (pillHeight / 2.0) * loopScale * vHeights[0][i]);
-          let inc_i = vInclines[0][i] * (w_i / 2);
-          let maxOffset = (S - w_i) / 2.0 - 0.1, offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[0][i] - 1) * (S/4)));
+        for(let i=0; i<K; i++) {
+          let A_pt = V[i], B_pt = V[(i+1)%K];
+          let dir = {x: B_pt.x - A_pt.x, y: B_pt.y - A_pt.y};
+          let L = Math.hypot(dir.x, dir.y);
+          dir = {x: dir.x/L, y: dir.y/L};
+          let norm = {x: dir.y, y: -dir.x};
+          
+          let localX = (P) => (P.x - A_pt.x)*dir.x + (P.y - A_pt.y)*dir.y;
+          let x_tl = localX(V_out[i]), x_tr = localX(V_out[(i+1)%K]);
+          let x_bl = localX(V_in[i]), x_br = localX(V_in[(i+1)%K]);
+          
+          if (x_tl > x_tr) { let mid = (x_tl + x_tr)/2; x_tl = mid; x_tr = mid; }
+          if (x_bl > x_br) { let mid = (x_bl + x_br)/2; x_bl = mid; x_br = mid; }
+          
+          let c = isStar ? Math.floor(i / 2) : i; 
+          let w_i = Math.min(L * 0.95, L * loopFillRatio * vLengths[0][c]);
+          let ht = Math.max(h_loop + 0.1, (pillHeight / 2.0) * loopScale * vHeights[0][c]);
+          let inc_i = vInclines[0][c] * (w_i / 2);
+          let maxOffset = (L - w_i) / 2.0 - 0.1;
+          let offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[0][c] - 1) * (L/4)));
+          
+          let center = L/2 + offset_i;
+          
+          let toGlobal = (lx, ly) => ({
+              x: A_pt.x + dir.x * lx + norm.x * ly,
+              y: A_pt.y + dir.y * lx + norm.y * ly,
+              isBridgeCorner: true
+          });
+          let toGlobalCut = (lx, ly) => ({
+              x: A_pt.x + dir.x * lx + norm.x * ly,
+              y: A_pt.y + dir.y * lx + norm.y * ly,
+              isBridgeCorner: false
+          });
 
-          let anchor_x_top_left = Math.max(-S_out/2, offset_i - w_i/2 + inc_i * (h_loop/ht));
-          let anchor_x_top_right = Math.min(S_out/2, offset_i + w_i/2 - inc_i * (h_loop/ht));
-          let anchor_x_bot_left = Math.max(-S_in/2, offset_i - w_i/2 + inc_i * (h_loop/ht));
-          let anchor_x_bot_right = Math.min(S_in/2, offset_i + w_i/2 - inc_i * (h_loop/ht));
+          if (swaps && swaps[c]) {
+              let angleRad = Math.atan2(dir.y, dir.x);
+              let cx = A_pt.x + dir.x * center;
+              let cy = A_pt.y + dir.y * center;
+              
+              swapCenters.push({ c: i, cx, cy, angleRad, swapData: swaps[c] });
+              const libItem = library && library.find(l => l.id === swaps[c].libraryId);
+              if (libItem) {
+                  let vbParts = libItem.viewBox.split(' ').map(Number);
+                  let w = vbParts[2] || 100, h_svg = vbParts[3] || 100;
+                  let radius = Math.hypot(w/2, h_svg/2) * swaps[c].scale;
+                  minX = Math.min(minX, cx - radius); maxX = Math.max(maxX, cx + radius);
+                  minY = Math.min(minY, cy - radius); maxY = Math.max(maxY, cy + radius);
+              }
+              outer_pts.push(toGlobal(x_tl, h_loop), toGlobal(x_tr, h_loop));
+              inner_pts.push(toGlobal(x_bl, -h_loop), toGlobal(x_br, -h_loop));
+              continue;
+          }
 
-          let seg_top = [{x: -S_out/2, y: -A - h_loop, isBridgeCorner: true}, {x: anchor_x_top_left, y: -A - h_loop, isBridgeCorner: true}];
-          if (inc_i >= w_i/2 - 0.1) seg_top.push({x: offset_i, y: -A - ht});
-          else seg_top.push({x: offset_i - w_i/2 + inc_i, y: -A - ht}, {x: offset_i + w_i/2 - inc_i, y: -A - ht});
-          seg_top.push({x: anchor_x_top_right, y: -A - h_loop, isBridgeCorner: true}, {x: S_out/2, y: -A - h_loop, isBridgeCorner: true});
+          let ax_tl = Math.max(x_tl, center - w_i/2 + inc_i * (h_loop/ht));
+          let ax_tr = Math.min(x_tr, center + w_i/2 - inc_i * (h_loop/ht));
+          let ax_bl = Math.max(x_bl, center - w_i/2 + inc_i * (h_loop/ht));
+          let ax_br = Math.min(x_br, center + w_i/2 - inc_i * (h_loop/ht));
 
-          let seg_bot = [{x: -S_in/2, y: -A + h_loop, isBridgeCorner: true}, {x: anchor_x_bot_left, y: -A + h_loop, isBridgeCorner: true}];
-          if (inc_i >= w_i/2 - 0.1) seg_bot.push({x: offset_i, y: -A + ht});
-          else seg_bot.push({x: offset_i - w_i/2 + inc_i, y: -A + ht}, {x: offset_i + w_i/2 - inc_i, y: -A + ht});
-          seg_bot.push({x: anchor_x_bot_right, y: -A + h_loop, isBridgeCorner: true}, {x: S_in/2, y: -A + h_loop, isBridgeCorner: true});
+          let seg_top = [toGlobal(x_tl, h_loop), toGlobal(ax_tl, h_loop)];
+          if (inc_i >= w_i/2 - 0.1) seg_top.push(toGlobalCut(center, ht));
+          else seg_top.push(toGlobalCut(center - w_i/2 + inc_i, ht), toGlobalCut(center + w_i/2 - inc_i, ht));
+          seg_top.push(toGlobal(ax_tr, h_loop), toGlobal(x_tr, h_loop));
 
-          for (let p of seg_top) outer_pts.push({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos, isBridgeCorner: p.isBridgeCorner });
-          for (let p of seg_bot) inner_pts.push({ x: p.x * cos - p.y * sin, y: p.x * sin + p.y * cos, isBridgeCorner: p.isBridgeCorner });
+          let seg_bot = [toGlobal(x_bl, -h_loop), toGlobal(ax_bl, -h_loop)];
+          if (inc_i >= w_i/2 - 0.1) seg_bot.push(toGlobalCut(center, -ht));
+          else seg_bot.push(toGlobalCut(center - w_i/2 + inc_i, -ht), toGlobalCut(center + w_i/2 - inc_i, -ht));
+          seg_bot.push(toGlobal(ax_br, -h_loop), toGlobal(x_br, -h_loop));
+
+          outer_pts.push(...seg_top);
+          inner_pts.push(...seg_bot);
         }
 
         pathDataArray.push(`${roundPolygon(cleanPoly(rotatePoints(outer_pts, rotation)), roundingRatio)} ${roundPolygon(cleanPoly(rotatePoints(inner_pts, rotation).reverse()), roundingRatio)}`);
@@ -527,7 +615,19 @@
 
       const contentW = maxX - minX + 2 * padX, contentH = maxY - minY + 2 * padY;
       const squareSize = Math.max(contentW, contentH, 100);
-      viewBox = `${minX - padX + contentW / 2 - squareSize / 2} ${minY - padY + contentH / 2 - squareSize / 2} ${squareSize} ${squareSize}`;
+      
+      let centerX = minX - padX + contentW / 2;
+      let centerY = minY - padY + contentH / 2;
+      let finalSquareSize = squareSize;
+      
+      // Force perfectly centered ViewBox in loop mode to prevent any wobble during rotations
+      if (layoutMode === 'loop') {
+          centerX = 0;
+          centerY = 0;
+          finalSquareSize = Math.max(Math.abs(maxX), Math.abs(minX), Math.abs(maxY), Math.abs(minY)) * 2 + 2 * Math.max(padX, padY);
+      }
+      
+      viewBox = `${centerX - finalSquareSize / 2} ${centerY - finalSquareSize / 2} ${finalSquareSize} ${finalSquareSize}`;
 
       return { pathDataArray, swapCenters, viewBox };
     };
@@ -554,7 +654,9 @@
       RefreshCcw: <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></>,
       Image: <><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>,
       Component: <><path d="M5.5 8.5 9 12l-3.5 3.5L2 12l3.5-3.5Z"/><path d="M12 2l3.5 3.5L12 9 8.5 5.5 12 2Z"/><path d="M18.5 8.5 22 12l-3.5 3.5L15 12l3.5-3.5Z"/><path d="M12 15l3.5 3.5L12 22l-3.5-3.5L12 15Z"/></>,
-      Trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>
+      Trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
+      Undo: <><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></>,
+      Redo: <><path d="M21 7v6h-6"/><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"/></>
     };
 
     const Icon = ({ name, size = 24, className = "" }) => (
@@ -626,6 +728,10 @@
       const [outerRoundingRatio, setOuterRoundingRatio] = useState(1.0);
       const [verticalModeOn, setVerticalModeOn] = useState(false);
       
+      // Star Mode specific (Loop only)
+      const [starModeOn, setStarModeOn] = useState(false);
+      const [starRatio, setStarRatio] = useState(0.5);
+
       const [waveFrequency, setWaveFrequency] = useState(0);
       const [waveAmplitude, setWaveAmplitude] = useState(0);
       const [followWave, setFollowWave] = useState(false);
@@ -639,9 +745,11 @@
       const [swaps, setSwaps] = useState({});
       const [selectedSwapIdx, setSelectedSwapIdx] = useState(0);
 
+      const shapeCount = layoutMode === 'line' ? lineCount : (layoutMode === 'loop' ? loopCount : lineCount);
+
       useEffect(() => {
-          if (selectedSwapIdx >= lineCount) setSelectedSwapIdx(Math.max(0, lineCount - 1));
-      }, [lineCount, selectedSwapIdx]);
+          if (selectedSwapIdx >= shapeCount) setSelectedSwapIdx(Math.max(0, shapeCount - 1));
+      }, [shapeCount, selectedSwapIdx]);
 
       // Grid Connection States
       const [gridPills, setGridPills] = useState(createGrid(80, 40, true));
@@ -686,7 +794,119 @@
       const [objectsOpen, setObjectsOpen] = useState(false);
       const [colorsOpen, setColorsOpen] = useState(false);
 
-      const shapeCount = layoutMode === 'line' ? lineCount : (layoutMode === 'loop' ? loopCount : lineCount);
+      // --- HISTORY & UNDO/REDO SYSTEM ---
+      const [history, setHistory] = useState([]);
+      const historyIndexRef = useRef(0);
+      const [historyIndex, setHistoryIndexState] = useState(0);
+      const isUndoRedo = useRef(false);
+      const [historyTrigger, setHistoryTrigger] = useState(0);
+
+      const setHistoryIndex = (idx) => {
+          historyIndexRef.current = idx;
+          setHistoryIndexState(idx);
+      };
+
+      const captureState = () => ({
+          layoutMode, lineCount, loopCount, patternRowCount, inclineRatio,
+          roundingRatio, intersectionSmoothness, vBridgeRoundingRatio, rotation, infiniteEdges,
+          outerRoundingRatio, verticalModeOn, waveFrequency, waveAmplitude, followWave,
+          pillLength, bridgeGap, pillHeight, bridgeThickness, patternRowSpacing, loopFillRatio,
+          gridPills, gridHBridges, gridVBridges, vRowSpacings, vHeights, vLengths,
+          vGaps, vInclines, bgColor, shapeSolidColor, library, swaps, starModeOn, starRatio
+      });
+
+      const applyState = (state) => {
+          if (state.layoutMode) setLayoutMode(state.layoutMode);
+          if (state.lineCount !== undefined) setLineCount(state.lineCount);
+          if (state.loopCount !== undefined) setLoopCount(state.loopCount);
+          if (state.patternRowCount !== undefined) setPatternRowCount(state.patternRowCount);
+          if (state.inclineRatio !== undefined) setInclineRatio(state.inclineRatio);
+          if (state.roundingRatio !== undefined) setRoundingRatio(state.roundingRatio);
+          if (state.intersectionSmoothness !== undefined) setIntersectionSmoothness(state.intersectionSmoothness);
+          if (state.vBridgeRoundingRatio !== undefined) setVBridgeRoundingRatio(state.vBridgeRoundingRatio);
+          if (state.rotation !== undefined) setRotation(state.rotation);
+          if (state.infiniteEdges !== undefined) setInfiniteEdges(state.infiniteEdges);
+          if (state.outerRoundingRatio !== undefined) setOuterRoundingRatio(state.outerRoundingRatio);
+          if (state.verticalModeOn !== undefined) setVerticalModeOn(state.verticalModeOn);
+          if (state.waveFrequency !== undefined) setWaveFrequency(state.waveFrequency);
+          if (state.waveAmplitude !== undefined) setWaveAmplitude(state.waveAmplitude);
+          if (state.followWave !== undefined) setFollowWave(state.followWave);
+          if (state.pillLength !== undefined) setPillLength(state.pillLength);
+          if (state.bridgeGap !== undefined) setBridgeGap(state.bridgeGap);
+          if (state.pillHeight !== undefined) setPillHeight(state.pillHeight);
+          if (state.bridgeThickness !== undefined) setBridgeThickness(state.bridgeThickness);
+          if (state.patternRowSpacing !== undefined) setPatternRowSpacing(state.patternRowSpacing);
+          if (state.loopFillRatio !== undefined) setLoopFillRatio(state.loopFillRatio);
+          if (state.gridPills) setGridPills(state.gridPills);
+          if (state.gridHBridges) setGridHBridges(state.gridHBridges);
+          if (state.gridVBridges) setGridVBridges(state.gridVBridges);
+          if (state.vRowSpacings) setVRowSpacings(state.vRowSpacings);
+          if (state.vHeights) setVHeights(state.vHeights);
+          if (state.vLengths) setVLengths(state.vLengths);
+          if (state.vGaps) setVGaps(state.vGaps);
+          if (state.vInclines) setVInclines(state.vInclines);
+          if (state.bgColor) setBgColor(state.bgColor);
+          if (state.shapeSolidColor) setShapeSolidColor(state.shapeSolidColor);
+          if (state.library) setLibrary(state.library);
+          if (state.swaps) setSwaps(state.swaps);
+          if (state.starModeOn !== undefined) setStarModeOn(state.starModeOn);
+          if (state.starRatio !== undefined) setStarRatio(state.starRatio);
+      };
+
+      useEffect(() => {
+          const initialState = captureState();
+          setHistory([initialState]);
+          setHistoryIndex(0);
+      }, []);
+
+      useEffect(() => {
+          if (historyTrigger > 0) {
+              const currentState = captureState();
+              setHistory(prev => {
+                  const newHistory = prev.slice(0, historyIndexRef.current + 1);
+                  const lastState = newHistory[newHistory.length - 1];
+                  if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) return prev;
+                  newHistory.push(currentState);
+                  if (newHistory.length > 50) newHistory.shift();
+                  setHistoryIndex(newHistory.length - 1);
+                  return newHistory;
+              });
+          }
+      }, [historyTrigger]);
+
+      const savePreState = () => {
+          const preState = captureState();
+          setHistory(prev => {
+              const newHistory = prev.slice(0, historyIndexRef.current + 1);
+              const lastState = newHistory[newHistory.length - 1];
+              if (!lastState || JSON.stringify(lastState) !== JSON.stringify(preState)) {
+                  newHistory.push(preState);
+                  if (newHistory.length > 50) newHistory.shift();
+                  setHistoryIndex(newHistory.length - 1);
+              }
+              return newHistory;
+          });
+      };
+
+      const handleUndo = () => {
+          if (historyIndexRef.current > 0) {
+              const prevIndex = historyIndexRef.current - 1;
+              isUndoRedo.current = true;
+              setHistoryIndex(prevIndex);
+              applyState(history[prevIndex]);
+          }
+      };
+
+      const handleRedo = () => {
+          if (historyIndexRef.current < history.length - 1) {
+              const nextIndex = historyIndexRef.current + 1;
+              isUndoRedo.current = true;
+              setHistoryIndex(nextIndex);
+              applyState(history[nextIndex]);
+          }
+      };
+      // --- END HISTORY SYSTEM ---
+
       const headerColor = shapeSolidColor;
 
       const handleLayoutMode = (mode) => {
@@ -758,14 +978,7 @@
       };
 
       const handleExportJson = () => {
-        const state = {
-          layoutMode, lineCount, loopCount, patternRowCount, inclineRatio,
-          roundingRatio, vBridgeRoundingRatio, rotation, infiniteEdges,
-          outerRoundingRatio, verticalModeOn, waveFrequency, waveAmplitude, followWave,
-          pillLength, bridgeGap, pillHeight, bridgeThickness, patternRowSpacing, loopFillRatio,
-          gridPills, gridHBridges, gridVBridges, vRowSpacings, vHeights, vLengths,
-          vGaps, vInclines, bgColor, shapeSolidColor, library, swaps
-        };
+        const state = captureState();
         const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -778,42 +991,13 @@
       const handleImportJson = (e) => {
         const file = e.target.files[0];
         if (!file) return;
+        savePreState();
         const reader = new FileReader();
         reader.onload = (event) => {
           try {
             const state = JSON.parse(event.target.result);
-            if (state.layoutMode) setLayoutMode(state.layoutMode);
-            if (state.lineCount) setLineCount(state.lineCount);
-            if (state.loopCount) setLoopCount(state.loopCount);
-            if (state.patternRowCount) setPatternRowCount(state.patternRowCount);
-            if (state.inclineRatio !== undefined) setInclineRatio(state.inclineRatio);
-            if (state.roundingRatio !== undefined) setRoundingRatio(state.roundingRatio);
-            if (state.vBridgeRoundingRatio !== undefined) setVBridgeRoundingRatio(state.vBridgeRoundingRatio);
-            if (state.rotation !== undefined) setRotation(state.rotation);
-            if (state.infiniteEdges !== undefined) setInfiniteEdges(state.infiniteEdges);
-            if (state.outerRoundingRatio !== undefined) setOuterRoundingRatio(state.outerRoundingRatio);
-            if (state.verticalModeOn !== undefined) setVerticalModeOn(state.verticalModeOn);
-            if (state.waveFrequency !== undefined) setWaveFrequency(state.waveFrequency);
-            if (state.waveAmplitude !== undefined) setWaveAmplitude(state.waveAmplitude);
-            if (state.followWave !== undefined) setFollowWave(state.followWave);
-            if (state.pillLength) setPillLength(state.pillLength);
-            if (state.bridgeGap !== undefined) setBridgeGap(state.bridgeGap);
-            if (state.pillHeight) setPillHeight(state.pillHeight);
-            if (state.bridgeThickness) setBridgeThickness(state.bridgeThickness);
-            if (state.patternRowSpacing) setPatternRowSpacing(state.patternRowSpacing);
-            if (state.loopFillRatio) setLoopFillRatio(state.loopFillRatio);
-            if (state.gridPills) setGridPills(state.gridPills);
-            if (state.gridHBridges) setGridHBridges(state.gridHBridges);
-            if (state.gridVBridges) setGridVBridges(state.gridVBridges);
-            if (state.vRowSpacings) setVRowSpacings(state.vRowSpacings);
-            if (state.vHeights) setVHeights(state.vHeights);
-            if (state.vLengths) setVLengths(state.vLengths);
-            if (state.vGaps) setVGaps(state.vGaps);
-            if (state.vInclines) setVInclines(state.vInclines);
-            if (state.bgColor) setBgColor(state.bgColor);
-            if (state.shapeSolidColor) setShapeSolidColor(state.shapeSolidColor);
-            if (state.library) setLibrary(state.library);
-            if (state.swaps) setSwaps(state.swaps);
+            applyState(state);
+            setTimeout(() => setHistoryTrigger(t => t + 1), 0);
           } catch (err) {
             alert("Invalid JSON file");
           }
@@ -889,6 +1073,7 @@
       };
 
       const handleResetAll = () => {
+        savePreState();
         setLayoutMode('line');
         setLineCount(3);
         setLoopCount(6);
@@ -910,6 +1095,8 @@
         setWaveAmplitude(0);
         setFollowWave(false);
         setSwaps({});
+        setStarModeOn(false);
+        setStarRatio(0.5);
 
         setGridPills(createGrid(80, 40, true));
         setGridHBridges(createGrid(80, 40, true));
@@ -924,11 +1111,13 @@
         setBgColor('#D9D2F6');
         setShapeSolidColor('#3E2568');
         setSelectedRow(null);
+        setHistoryTrigger(t => t + 1);
       };
 
-      const handleRandomise = (isDynamic) => {
+      const handleRandomise = (isDynamic, forceMode = null) => {
+        savePreState();
         const modeList = ['line', 'loop', 'pattern']; 
-        const mode = modeList[Math.floor(Math.random() * modeList.length)];
+        const mode = forceMode || modeList[Math.floor(Math.random() * modeList.length)];
         setLayoutMode(mode);
         setSelectedRow(null);
         setInfiniteEdges(true);
@@ -938,6 +1127,7 @@
         let newIncline = 0.20;
         let newShapeCount = shapeCount;
         let newWaveFreq = 0;
+        let newRotation = Math.floor(Math.random() * 8) * 45;
 
         if (mode === 'line' || mode === 'pattern') {
           newShapeCount = Math.floor(Math.random() * (mode === 'pattern' ? 10 : 8)) + 1;
@@ -950,7 +1140,12 @@
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
-          setPillLength(Math.floor(Math.random() * 601) + 400); 
+          
+          if (mode === 'pattern') {
+            setPillLength(Math.floor(Math.random() * 301) + 100); 
+          } else {
+            setPillLength(Math.floor(Math.random() * 601) + 400); 
+          }
 
           if (mode === 'pattern') {
             setPatternRowCount(Math.floor(Math.random() * 16) + 5); 
@@ -987,10 +1182,16 @@
           setWaveFrequency(0);
           setWaveAmplitude(0);
           setFollowWave(false);
+          if (Math.random() > 0.6) {
+              setStarModeOn(true);
+              setStarRatio(Math.random() * 0.6 + 0.2);
+          } else {
+              setStarModeOn(false);
+          }
         }
 
         setInclineRatio(newIncline);
-        setRotation(0); 
+        setRotation(newRotation); 
         setOuterRoundingRatio(1.0);
 
         let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1), nI = createGrid(80, 40, newIncline);
@@ -998,7 +1199,7 @@
         let nG = [...vGaps]; 
 
         if (isDynamic) {
-          const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
+          const presets = ['gradual', 'wave']; // Restricted to gradual and wave
           const rows = mode === 'pattern' ? 40 : 1;
           const isAlternate = mode === 'pattern' && Math.random() > 0.5;
 
@@ -1022,10 +1223,12 @@
 
         setVHeights(nH); setVLengths(nL); setVInclines(nI); setVRowSpacings(nRS);
         handleRandomiseColors();
+        setHistoryTrigger(t => t + 1);
       };
 
       const handleRandomiseVariations = () => {
-        const presets = ['gradual', 'wave', 'zig-zag', 'reset'];
+        savePreState();
+        const presets = ['gradual', 'wave']; // Restricted to gradual and wave
         const rows = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
         const isAlternate = layoutMode === 'pattern' && Math.random() > 0.5;
 
@@ -1050,14 +1253,17 @@
         }
         setVHeights(newH); setVLengths(newL); setVGaps(newG); setVInclines(newI);
         if (layoutMode === 'pattern') setVRowSpacings(getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, patternRowCount - 1));
+        setHistoryTrigger(t => t + 1);
       };
 
       const handleResetAllVariations = () => {
+        savePreState();
         setVHeights(createGrid(80, 40, 1));
         setVLengths(createGrid(80, 40, 1));
         setVGaps(createGrid(80, 40, 1));
         setVInclines(createGrid(80, 40, inclineRatio));
         setVRowSpacings(Array(80).fill(1));
+        setHistoryTrigger(t => t + 1);
       };
 
       const togglePill = (r, c) => { let n = [...gridPills]; n[r] = [...n[r]]; n[r][c] = !n[r][c]; setGridPills(n); };
@@ -1085,7 +1291,8 @@
         loopFillRatio, rotation, infiniteEdges, verticalModeOn,
         vLengths, vHeights, vInclines, vGaps, vRowSpacings,
         gridPills, gridHBridges, gridVBridges, halftonePixels,
-        waveFrequency, waveAmplitude, followWave, swaps, library
+        waveFrequency, waveAmplitude, followWave, swaps, library,
+        starModeOn, starRatio
       });
 
       const svgPathsMarkup = verticalModeOn || layoutMode !== 'pattern' 
@@ -1105,15 +1312,16 @@
          let smoothness = sc.swapData.smoothness || 0;
          let strokeAttrs = smoothness > 0 ? ` stroke="${shapeSolidColor}" stroke-width="${smoothness}" stroke-linejoin="round" stroke-linecap="round"` : '';
          
-return `<g transform="translate(${sc.cx}, ${sc.cy}) rotate(${totalRot}) scale(${sc.swapData.scale})"><g transform="translate(${ox}, ${oy})">${innerHtml}</g></g>`;      }).join('\n      ');
+         return `<g transform="translate(${sc.cx}, ${sc.cy}) rotate(${totalRot}) scale(${sc.swapData.scale})"><g transform="translate(${ox}, ${oy})"${strokeAttrs}>${innerHtml}</g></g>`;
+      }).join('\n      ');
         
 const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">
   <defs>
-<filter id="goo-export">
-  <feGaussianBlur in="SourceGraphic" stdDeviation="${intersectionSmoothness}" result="blur" />
-  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
-  <feBlend in="SourceGraphic" in2="goo" mode="normal" />
-</filter>
+    <filter id="goo-export">
+      <feGaussianBlur in="SourceGraphic" stdDeviation="${intersectionSmoothness}" result="blur" />
+      <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
+      <feBlend in="SourceGraphic" in2="goo" mode="normal" />
+    </filter>
   </defs>
   <g filter="url(#goo-export)">
     ${svgPathsMarkup}
@@ -1171,7 +1379,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
             {count > 0 ? Array(count).fill(0).map((_, i) => (
               <div key={i} className="flex items-center gap-2">
                 <span className="text-[10px] font-mono font-bold text-neutral-400 w-8">Gap {i+1}</span>
-                <input type="range" min={min} max={max} step={step} value={stateArr[i]} onChange={(e) => { let n = [...stateArr]; n[i] = parseFloat(e.target.value); setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                <input type="range" min={min} max={max} step={step} value={stateArr[i]} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => { let n = [...stateArr]; n[i] = parseFloat(e.target.value); setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                 <span className="text-[10px] font-mono font-bold text-indigo-600 w-8 text-right">{formatFn(stateArr[i])}</span>
               </div>
             )) : <div className="text-xs text-neutral-500 text-center py-2">Add more rows to adjust gaps.</div>}
@@ -1198,7 +1406,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
           {Array(shapeCount).fill(0).map((_, i) => (
             <div key={i} className="flex items-center gap-2">
               <span className="text-[10px] font-mono font-bold text-neutral-400 w-4">{i+1}</span>
-              <input type="range" min={min} max={max} step={step} value={stateArr[rowIdx][i]} onChange={(e) => { let n = [...stateArr]; let rowData = [...n[rowIdx]]; rowData[i] = parseFloat(e.target.value); n[rowIdx] = rowData; setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+              <input type="range" min={min} max={max} step={step} value={stateArr[rowIdx][i]} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => { let n = [...stateArr]; let rowData = [...n[rowIdx]]; rowData[i] = parseFloat(e.target.value); n[rowIdx] = rowData; setter(n); }} className="flex-1 h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
               <span className="text-[10px] font-mono font-bold text-indigo-600 w-8 text-right">{formatFn(stateArr[rowIdx][i])}</span>
             </div>
           ))}
@@ -1234,7 +1442,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                           <label className="text-xs font-semibold text-neutral-700">Amount of Shapes</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{lineCount}</span>
                         </div>
-                        <input type="range" min="1" max={layoutMode === 'halftone' ? 40 : (layoutMode === 'pattern' ? 10 : 8)} step="1" value={lineCount} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'halftone' ? 40 : (layoutMode === 'pattern' ? 10 : 8)} step="1" value={lineCount} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
 
@@ -1244,7 +1452,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                           <label className="text-xs font-semibold text-neutral-700">Amount of Rows</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{patternRowCount}</span>
                         </div>
-                        <input type="range" min="1" max={layoutMode === 'halftone' ? 80 : 20} step="1" value={patternRowCount} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'halftone' ? 80 : 20} step="1" value={patternRowCount} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPatternRowCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
 
@@ -1258,7 +1466,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                             </div>
                             <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveFrequency}</span>
                           </div>
-                          <input type="range" min="0" max="10" step="0.1" value={waveFrequency} onChange={(e) => setWaveFrequency(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                          <input type="range" min="0" max="10" step="0.1" value={waveFrequency} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveFrequency(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                         </div>
                         <div>
                           <div className="flex justify-between items-end mb-2">
@@ -1268,14 +1476,14 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                             </div>
                             <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveAmplitude}</span>
                           </div>
-                          <input type="range" min="0" max="1000" step="10" value={waveAmplitude} onChange={(e) => setWaveAmplitude(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                          <input type="range" min="0" max="1000" step="10" value={waveAmplitude} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveAmplitude(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                         </div>
                         <div className="flex items-center justify-between pt-1">
                           <div>
                             <span className="text-xs font-semibold text-neutral-700">Rotate following the wave</span>
                             <p className="text-[10px] text-neutral-500">Align elements to the wave angle</p>
                           </div>
-                          <button onClick={() => setFollowWave(!followWave)} className={`w-8 h-4 rounded-full relative transition-colors ${followWave ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
+                          <button onClick={() => { setFollowWave(!followWave); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${followWave ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
                             <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${followWave ? 'translate-x-4' : 'translate-x-0'}`} />
                           </button>
                         </div>
@@ -1286,8 +1494,30 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       <div>
                         <label className="text-xs font-semibold text-neutral-700 block mb-3">Polygon Structure</label>
                         <div className="grid grid-cols-4 gap-2">
-                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => setLoopCount(n)} />)}
+                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => { setLoopCount(n); setHistoryTrigger(t => t + 1); }} />)}
                         </div>
+                        
+                        <div className="flex items-center justify-between pt-5 border-t border-neutral-200 mt-5">
+                          <div>
+                            <span className="text-xs font-semibold text-neutral-700">Star Mode</span>
+                            <p className="text-[10px] text-neutral-500">Create secondary inner corners</p>
+                          </div>
+                          <button onClick={() => { setStarModeOn(!starModeOn); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${starModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
+                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${starModeOn ? 'translate-x-4' : 'translate-x-0'}`} />
+                          </button>
+                        </div>
+
+                        {starModeOn && (
+                          <div>
+                            <div className="flex justify-between items-end mb-2 mt-4">
+                              <div>
+                                <label className="text-xs font-semibold text-neutral-700">Star Depth Ratio</label>
+                              </div>
+                              <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(starRatio * 100)}%</span>
+                            </div>
+                            <input type="range" min="0.1" max="1.5" step="0.05" value={starRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setStarRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -1299,7 +1529,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                         </div>
                         <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{rotation}°</span>
                       </div>
-                      <input type="range" min="0" max="315" step="45" value={rotation} onChange={(e) => setRotation(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                      <input type="range" min="0" max="315" step="45" value={rotation} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setRotation(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
                     <div>
@@ -1310,7 +1540,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                         </div>
                         <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round((inclineRatio / 0.9) * 100)}%</span>
                       </div>
-                      <input type="range" min="0" max="0.9" step="0.01" value={inclineRatio} onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                      <input type="range" min="0" max="0.9" step="0.01" value={inclineRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
                     <div>
@@ -1321,7 +1551,18 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                         </div>
                         <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(roundingRatio * 100)}%</span>
                       </div>
-                      <input type="range" min="0" max="1" step="0.01" value={roundingRatio} onChange={(e) => setRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                      <input type="range" min="0" max="1" step="0.01" value={roundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between items-end mb-2">
+                        <div>
+                          <label className="text-xs font-semibold text-neutral-700">Intersection Smoothness</label>
+                          <p className="text-[10px] text-neutral-500">Controls webbing where shapes meet the line</p>
+                        </div>
+                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{intersectionSmoothness}px</span>
+                      </div>
+                      <input type="range" min="1" max="24" step="1" value={intersectionSmoothness} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setIntersectionSmoothness(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
                     {(layoutMode === 'pattern' || layoutMode === 'halftone') && (
@@ -1333,29 +1574,29 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                           </div>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(vBridgeRoundingRatio * 100)}%</span>
                         </div>
-                        <input type="range" min="0" max="1" step="0.01" value={vBridgeRoundingRatio} onChange={(e) => setVBridgeRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="0" max="1" step="0.01" value={vBridgeRoundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setVBridgeRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
 
                     <div className="grid grid-cols-3 gap-2 pt-2">
-                      <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
-                      <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
-                      <button onClick={() => { handleGlobalIncline(0.9); setRoundingRatio(1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
+                      <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
+                      <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
+                      <button onClick={() => { handleGlobalIncline(0.9); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
                     </div>
 
                     {layoutMode === 'pattern' && (
                       <div className="flex flex-col space-y-4 pt-4 border-t border-neutral-200">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-neutral-700">Vertical Connections</span>
-                          <button onClick={() => setVerticalModeOn(!verticalModeOn)} className={`w-8 h-4 rounded-full relative transition-colors ${verticalModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${verticalModeOn ? 'translate-x-4' : 'translate-x-0'}`} /></button>
+                          <button onClick={() => { setVerticalModeOn(!verticalModeOn); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${verticalModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${verticalModeOn ? 'translate-x-4' : 'translate-x-0'}`} /></button>
                         </div>
                         {verticalModeOn && (
                           <div className="bg-neutral-50 py-6 px-2 rounded-xl border border-neutral-200 overflow-x-auto hide-scrollbar flex flex-col items-center">
                              <div className="flex gap-2 justify-center mb-6 w-full flex-wrap">
-                                <button onClick={handleConnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect All</button>
-                                <button onClick={handleDisconnectAll} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Disconnect All</button>
-                                <button onClick={handleConnectRows} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Rows</button>
-                                <button onClick={handleConnectCols} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Cols</button>
+                                <button onClick={() => { handleConnectAll(); setHistoryTrigger(t => t + 1); }} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect All</button>
+                                <button onClick={() => { handleDisconnectAll(); setHistoryTrigger(t => t + 1); }} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Disconnect All</button>
+                                <button onClick={() => { handleConnectRows(); setHistoryTrigger(t => t + 1); }} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Rows</button>
+                                <button onClick={() => { handleConnectCols(); setHistoryTrigger(t => t + 1); }} className="px-3 py-1.5 bg-white border border-neutral-300 text-neutral-700 text-[9px] font-bold uppercase tracking-wider rounded shadow-sm hover:bg-neutral-50 transition-colors">Connect Cols</button>
                              </div>
                              
                              {layoutMode !== 'halftone' ? (
@@ -1365,13 +1606,13 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                                         <React.Fragment key={`row-${r}`}>
                                            {Array(lineCount).fill(0).map((_, c) => (
                                               <React.Fragment key={`p-${r}-${c}`}>
-                                                 <div className="flex justify-center items-center w-4 h-4"><button onClick={() => togglePill(r, c)} className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`} title="Toggle Shape" /></div>
-                                                 {c < lineCount - 1 && <div className="flex justify-center items-center w-6 h-4"><button onClick={() => toggleHBridge(r, c)} className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Horizontal Bridge" /></div>}
+                                                 <div className="flex justify-center items-center w-4 h-4"><button onClick={() => { togglePill(r, c); setHistoryTrigger(t => t + 1); }} className={`w-4 h-4 rounded-full transition-colors shadow-sm ${gridPills[r][c] ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-white border-2 border-neutral-300 hover:border-neutral-400'}`} title="Toggle Shape" /></div>
+                                                 {c < lineCount - 1 && <div className="flex justify-center items-center w-6 h-4"><button onClick={() => { toggleHBridge(r, c); setHistoryTrigger(t => t + 1); }} className={`w-6 h-2.5 rounded-sm transition-colors ${gridHBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Horizontal Bridge" /></div>}
                                               </React.Fragment>
                                            ))}
                                            {r < patternRowCount - 1 && Array(lineCount).fill(0).map((_, c) => (
                                               <React.Fragment key={`v-${r}-${c}`}>
-                                                 <div className="flex justify-center items-center w-4 h-6"><button onClick={() => toggleVBridge(r, c)} className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Vertical Bridge" /></div>
+                                                 <div className="flex justify-center items-center w-4 h-6"><button onClick={() => { toggleVBridge(r, c); setHistoryTrigger(t => t + 1); }} className={`w-2.5 h-6 rounded-sm transition-colors ${gridVBridges[r][c] ? 'bg-indigo-400 hover:bg-indigo-500' : 'bg-neutral-200 hover:bg-neutral-300'}`} title="Toggle Vertical Bridge" /></div>
                                                  {c < lineCount - 1 && <div className="w-6 h-6" />}
                                               </React.Fragment>
                                            ))}
@@ -1390,7 +1631,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                     {(layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') && (
                       <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
                         <span className="text-xs font-semibold text-neutral-700">Side Lines</span>
-                        <button onClick={() => setInfiniteEdges(!infiniteEdges)} className={`w-8 h-4 rounded-full relative transition-colors ${infiniteEdges ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${infiniteEdges ? 'translate-x-4' : 'translate-x-0'}`} /></button>
+                        <button onClick={() => { setInfiniteEdges(!infiniteEdges); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${infiniteEdges ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${infiniteEdges ? 'translate-x-4' : 'translate-x-0'}`} /></button>
                       </div>
                     )}
 
@@ -1403,7 +1644,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                           </div>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(outerRoundingRatio * 100)}%</span>
                         </div>
-                        <input type="range" min="0" max="1" step="0.01" value={outerRoundingRatio} onChange={(e) => setOuterRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="0" max="1" step="0.01" value={outerRoundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setOuterRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
                   </div>
@@ -1425,18 +1666,18 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       <>
                         <div>
                           <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Length</label><span className="text-xs text-neutral-400 font-mono">{pillLength}</span></div>
-                          <input type="range" min="40" max="1000" step="1" value={pillLength} onChange={(e) => setPillLength(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                          <input type="range" min="40" max="1000" step="1" value={pillLength} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPillLength(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                         <div>
                           <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Bridge Gap</label><span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span></div>
-                          <input type="range" min="0" max="800" step="1" value={bridgeGap} onChange={(e) => setBridgeGap(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                          <input type="range" min="0" max="800" step="1" value={bridgeGap} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setBridgeGap(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     ) : (
                       <>
                         <div>
                           <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Pill Fill Amount</label><span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span></div>
-                          <input type="range" min="0.05" max="0.95" step="0.01" value={loopFillRatio} onChange={(e) => setLoopFillRatio(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                          <input type="range" min="0.05" max="0.95" step="0.01" value={loopFillRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLoopFillRatio(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     )}
@@ -1444,18 +1685,18 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                     {layoutMode === 'pattern' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Row Spacing</label><span className="text-xs text-neutral-400 font-mono">{patternRowSpacing}</span></div>
-                        <input type="range" min="50" max="1000" step="1" value={patternRowSpacing} onChange={(e) => setPatternRowSpacing(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                        <input type="range" min="50" max="1000" step="1" value={patternRowSpacing} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPatternRowSpacing(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                       </div>
                     ) : null}
 
                     <div>
                       <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Height</label><span className="text-xs text-neutral-400 font-mono">{pillHeight}</span></div>
-                      <input type="range" min="80" max="400" step="1" value={pillHeight} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                      <input type="range" min="80" max="400" step="1" value={pillHeight} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
 
                     <div>
                       <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Bridge Thickness</label><span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span></div>
-                      <input type="range" min="1" max={Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                      <input type="range" min="1" max={Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
                   </div>
                 )}
@@ -1502,10 +1743,10 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
               <div className="h-px bg-neutral-200 w-full" />
 
               {/* Custom Objects Library Panel */}
-              {layoutMode === 'line' && (
+              {(layoutMode === 'line' || layoutMode === 'loop') && (
                   <div>
                     <button onClick={() => setObjectsOpen(!objectsOpen)} className="w-full flex items-center justify-between group py-2">
-                      <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Component" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Custom Objects (Line Mode)</h3>
+                      <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Component" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Custom Objects ({layoutMode === 'line' ? 'Line' : 'Loop'} Mode)</h3>
                       {objectsOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                     </button>
 
@@ -1514,18 +1755,18 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                            <div className="flex items-center gap-2 mb-3">
                               <label className="text-xs font-semibold text-neutral-700">Target Element</label>
                               <select value={selectedSwapIdx} onChange={e => setSelectedSwapIdx(Number(e.target.value))} className="flex-1 text-xs bg-white border border-neutral-200 rounded p-1.5 font-bold outline-none cursor-pointer hover:border-indigo-300">
-                                 {Array(lineCount).fill(0).map((_, i) => <option key={i} value={i}>Element {i + 1}</option>)}
+                                 {Array(shapeCount).fill(0).map((_, i) => <option key={i} value={i}>Element {i + 1}</option>)}
                               </select>
                            </div>
 
                            {!swaps[selectedSwapIdx] ? (
-                              <button onClick={() => setSwaps({...swaps, [selectedSwapIdx]: { libraryId: library[0].id, scale: 1, rotation: 0, smoothness: 0 }})} className="w-full py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold uppercase rounded-md hover:bg-indigo-100 transition-colors shadow-sm">Replace this Element</button>
+                              <button onClick={() => { setSwaps({...swaps, [selectedSwapIdx]: { libraryId: library[0].id, scale: 1, rotation: 0, smoothness: 0 }}); setHistoryTrigger(t => t + 1); }} className="w-full py-2.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold uppercase rounded-md hover:bg-indigo-100 transition-colors shadow-sm">Replace this Element</button>
                            ) : (
                               <div className="space-y-4">
                                  <label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider block mb-[-8px]">Select Object</label>
                                  <div className="grid grid-cols-3 gap-2">
                                     {library.map(lib => (
-                                       <button key={lib.id} onClick={() => setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], libraryId: lib.id}})} className={`aspect-square border rounded-md flex items-center justify-center p-2 transition-all ${swaps[selectedSwapIdx].libraryId === lib.id ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-neutral-200 hover:border-neutral-400 bg-white shadow-sm'}`}>
+                                       <button key={lib.id} onClick={() => { setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], libraryId: lib.id}}); setHistoryTrigger(t => t + 1); }} className={`aspect-square border rounded-md flex items-center justify-center p-2 transition-all ${swaps[selectedSwapIdx].libraryId === lib.id ? 'border-indigo-500 bg-indigo-50 shadow-inner' : 'border-neutral-200 hover:border-neutral-400 bg-white shadow-sm'}`}>
                                            <svg viewBox={lib.viewBox} className="w-full h-full text-indigo-900" fill="currentColor" dangerouslySetInnerHTML={{ __html: lib.inner.replace(/fill="[^"]*"/gi, 'fill="currentColor"') }} />
                                        </button>
                                     ))}
@@ -1539,16 +1780,15 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                                  <div className="pt-2 border-t border-neutral-200 space-y-3">
                                      <div>
                                          <div className="flex justify-between mb-1"><label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Object Scale</label><span className="text-[10px] font-mono text-indigo-600">{swaps[selectedSwapIdx].scale.toFixed(2)}x</span></div>
-                                         <input type="range" min="0.1" max="5" step="0.05" value={swaps[selectedSwapIdx].scale} onChange={e => setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], scale: parseFloat(e.target.value)}})} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                                         <input type="range" min="0.1" max="5" step="0.05" value={swaps[selectedSwapIdx].scale} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={e => setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], scale: parseFloat(e.target.value)}})} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                                      </div>
                                      <div>
                                          <div className="flex justify-between mb-1"><label className="text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Rotation Override</label><span className="text-[10px] font-mono text-indigo-600">{swaps[selectedSwapIdx].rotation}°</span></div>
-                                         <input type="range" min="-180" max="180" step="5" value={swaps[selectedSwapIdx].rotation} onChange={e => setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], rotation: parseInt(e.target.value)}})} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
+                                         <input type="range" min="-180" max="180" step="5" value={swaps[selectedSwapIdx].rotation} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={e => setSwaps({...swaps, [selectedSwapIdx]: {...swaps[selectedSwapIdx], rotation: parseInt(e.target.value)}})} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-500" />
                                      </div>
-                              
                                  </div>
                                  
-                                 <button onClick={() => { const ns = {...swaps}; delete ns[selectedSwapIdx]; setSwaps(ns); }} className="w-full py-2 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded-md flex items-center justify-center gap-1 hover:bg-red-100 transition-colors border border-red-200"><Icon name="Trash" size={14} /> Remove Replacement</button>
+                                 <button onClick={() => { const ns = {...swaps}; delete ns[selectedSwapIdx]; setSwaps(ns); setHistoryTrigger(t => t + 1); }} className="w-full py-2 bg-red-50 text-red-600 text-[10px] font-bold uppercase rounded-md flex items-center justify-center gap-1 hover:bg-red-100 transition-colors border border-red-200"><Icon name="Trash" size={14} /> Remove Replacement</button>
                               </div>
                            )}
                         </div>
@@ -1569,21 +1809,21 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                   <div className="mt-4 space-y-6">
                     <div className="flex justify-between items-center -mb-2">
                       <label className="text-xs font-semibold text-neutral-700">Color Selection</label>
-                      <button onClick={handleRandomiseColors} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="Shuffle" size={10} /> Random Colors</button>
+                      <button onClick={() => { savePreState(); handleRandomiseColors(); setHistoryTrigger(t => t + 1); }} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="Shuffle" size={10} /> Random Colors</button>
                     </div>
                     <div>
                       <label className="text-xs font-semibold text-neutral-700 block mb-2">Background Color</label>
                       <div className="flex flex-wrap gap-2">
-                        {palette.map(c => <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={setBgColor} />)}
-                        <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={setBgColor} />
+                        {palette.map(c => <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />)}
+                        <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />
                       </div>
                     </div>
                     <div className="h-px bg-neutral-100 w-full" />
                     <div>
                       <div className="flex justify-between items-center mb-2"><label className="text-xs font-semibold text-neutral-700">Shape Color</label></div>
                       <div className="flex flex-wrap gap-2">
-                        {palette.map(c => <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={setShapeSolidColor} />)}
-                        <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={setShapeSolidColor} />
+                        {palette.map(c => <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />)}
+                        <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />
                       </div>
                     </div>
                   </div>
@@ -1593,16 +1833,23 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
 
             {/* Action Buttons (Fixed Bottom) */}
             <div className="p-6 bg-neutral-50 border-t border-neutral-200 space-y-3 shrink-0 flex flex-col gap-2">
-              <div className="flex gap-2 mb-1 justify-end">
-                 <button onClick={handleExportJson} className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"><Icon name="Save" size={12} /> Save Setup</button>
-                 <input type="file" id="importSetup" accept=".json" onChange={handleImportJson} className="hidden" />
-                 <label htmlFor="importSetup" className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 hover:text-indigo-600 flex items-center gap-1 transition-colors cursor-pointer m-0"><Icon name="Upload" size={12} /> Load Setup</label>
+              <div className="flex gap-2 mb-1 justify-between">
+                 <div className="flex gap-1">
+                    <button onClick={handleUndo} disabled={historyIndexRef.current <= 0} className={`p-1.5 rounded transition-colors ${historyIndexRef.current <= 0 ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50'}`} title="Undo"><Icon name="Undo" size={16} /></button>
+                    <button onClick={handleRedo} disabled={historyIndexRef.current >= history.length - 1} className={`p-1.5 rounded transition-colors ${historyIndexRef.current >= history.length - 1 ? 'text-neutral-300 cursor-not-allowed' : 'text-neutral-500 hover:text-indigo-600 hover:bg-indigo-50'}`} title="Redo"><Icon name="Redo" size={16} /></button>
+                 </div>
+                 <div className="flex gap-2">
+                    <button onClick={handleExportJson} className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 hover:text-indigo-600 flex items-center gap-1 transition-colors"><Icon name="Save" size={12} /> Save Setup</button>
+                    <input type="file" id="importSetup" accept=".json" onChange={handleImportJson} className="hidden" />
+                    <label htmlFor="importSetup" className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 hover:text-indigo-600 flex items-center gap-1 transition-colors cursor-pointer m-0"><Icon name="Upload" size={12} /> Load Setup</label>
+                 </div>
               </div>
 
               <div className="flex gap-2">
+                <button onClick={() => handleRandomise(true, layoutMode)} className="flex-[1.2] py-2 px-1 bg-indigo-600 hover:bg-indigo-700 border border-indigo-700 text-white rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Randomise {layoutMode}</button>
                 <button onClick={() => handleRandomise(false)} className="flex-1 py-2 px-1 bg-white hover:bg-neutral-50 border border-neutral-300 text-neutral-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Uniform</button>
                 <button onClick={() => handleRandomise(true)} className="flex-1 py-2 px-1 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="Shuffle" size={12} /> Dynamic</button>
-                <button onClick={handleResetAll} className="flex-1 py-2 px-1 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg text-[9px] uppercase tracking-wider font-bold flex items-center justify-center gap-1 transition-all shadow-sm active:scale-[0.98]"><Icon name="RefreshCcw" size={12} /> Reset All</button>
+                <button onClick={handleResetAll} className="w-9 shrink-0 py-2 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 rounded-lg flex items-center justify-center transition-all shadow-sm active:scale-[0.98]" title="Reset All"><Icon name="RefreshCcw" size={14} /></button>
               </div>
               <div className="flex gap-2">
                 <button onClick={handleDownload} className="flex-1 py-3 px-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-semibold flex items-center justify-center gap-2 transition-all shadow-sm hover:shadow active:scale-[0.98]"><Icon name="Download" size={18} /> Download</button>

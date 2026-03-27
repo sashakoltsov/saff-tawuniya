@@ -1892,10 +1892,10 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
     ) : (
       pathDataArray.map((d, r) => (
         <path 
-          key={r} d={d} fill={hoveredRow === r ? 'white' : shapeSolidColor} fillRule="evenodd" 
-          className="transition-all duration-300 ease-out cursor-pointer drop-shadow-sm hover:drop-shadow-lg"
-          style={{ opacity: hoveredRow !== null && hoveredRow !== r ? 0.5 : 1 }}
-          onMouseEnter={() => setHoveredRow(r)} onMouseLeave={() => setHoveredRow(null)} onClick={() => setSelectedRow(r)}
+        ey={r} d={d} fill={hoveredRow === r ? 'white' : shapeSolidColor} fillRule="evenodd" 
+        className="transition-all duration-300 ease-out cursor-pointer"
+        style={{ opacity: hoveredRow !== null && hoveredRow !== r ? 0.5 : 1 }}
+        onMouseEnter={() => setHoveredRow(r)} onMouseLeave={() => setHoveredRow(null)} onClick={() => setSelectedRow(r)}
         />
       ))
     )}

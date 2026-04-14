@@ -53,12 +53,14 @@
           if (p.isBridgeCorner) prev.isBridgeCorner = true;
           if (p.isOuterCutoff) prev.isOuterCutoff = true;
           if (p.isVBridgeCorner) prev.isVBridgeCorner = true;
+          if (p.isSharp) prev.isSharp = true;
         }
       }
       if (clean.length > 1 && Math.hypot(clean[0].x - clean[clean.length - 1].x, clean[0].y - clean[clean.length - 1].y) < 0.1) {
         if (clean[clean.length - 1].isBridgeCorner) clean[0].isBridgeCorner = true;
         if (clean[clean.length - 1].isOuterCutoff) clean[0].isOuterCutoff = true;
         if (clean[clean.length - 1].isVBridgeCorner) clean[0].isVBridgeCorner = true;
+        if (clean[clean.length - 1].isSharp) clean[0].isSharp = true;
         clean.pop();
       }
       let finalClean = [];
@@ -76,7 +78,7 @@
       return finalClean.length >= 3 ? finalClean : clean;
     };
 
-    const roundPolygon = (pts, ratio, lineModeBridgeCap, outerRatio = 1.0, vBridgeRatio = 1.0) => {
+    const roundPolygon = (pts, ratio, lineModeBridgeCap, outerRatio = 0.6, vBridgeRatio = 0.6) => {
       if (ratio <= 0.001 && outerRatio <= 0.001 && vBridgeRatio <= 0.001) return "M " + pts.map(p => `${p.x},${p.y}`).join(" L ") + " Z";
       
       const n = pts.length;
@@ -93,6 +95,7 @@
         let currentRatio = ratio;
         if (p.isOuterCutoff) currentRatio = outerRatio;
         else if (p.isVBridgeCorner) currentRatio = vBridgeRatio;
+        if (p.isSharp) currentRatio = 0;
 
         let prevEdge = edges[(i-1+n)%n];
         let nextEdge = edges[i];
@@ -103,7 +106,7 @@
         }
         
         let T = T_max * currentRatio;
-        if (T < 0.1) {
+        if (T < 0.1 || currentRatio === 0) {
           d += `${i === 0 ? 'M' : 'L'} ${p.x},${p.y} `;
           continue;
         }
@@ -127,14 +130,12 @@
     };
 
     const generateGeometry = ({
-      layoutMode, shapeCount, patternRowCount, patternRowSpacing,
-      pillLength, pillHeight, bridgeThickness, bridgeGap,
-      roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
+      layoutMode, timelineSubMode, wavyLine, stepComposition, stepDistance, shapeCount, patternRowCount, patternRowSpacing,
+      pillLength, pillHeight, bridgeThickness, bridgeGap, elementShape,
       loopFillRatio, rotation, infiniteEdges, verticalModeOn,
-      vLengths, vHeights, vInclines, vGaps, vRowSpacings,
+      vLengths, vHeights, vGaps, vRowSpacings,
       gridPills, gridHBridges, gridVBridges, halftonePixels,
-      waveFrequency, waveAmplitude, followWave, swaps, library,
-      starModeOn, starRatio
+      waveFrequency, waveAmplitude, swaps, library
     }) => {
       let pathDataArray = [];
       let swapCenters = [];
@@ -144,10 +145,16 @@
       let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
       let padX = 40, padY = 40;
 
-      if (layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') {
+      // Fixed rounding for new spec
+      const roundingRatio = 0.6;
+      const outerRoundingRatio = 0.6;
+      const vBridgeRoundingRatio = 0.6;
+      const isSmoothPill = elementShape === 'smooth-pill';
+
+      if (layoutMode === 'timeline' || layoutMode === 'ecosystem' || layoutMode === 'halftone') {
         const N = Math.max(1, shapeCount);
-        const rows = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
-        const spacing = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowSpacing : 0;
+        const rows = (layoutMode === 'ecosystem' || layoutMode === 'halftone') ? patternRowCount : 1;
+        const spacing = (layoutMode === 'ecosystem' || layoutMode === 'halftone') ? patternRowSpacing : 0;
         const HUGE_EXT = 8000; 
 
         let cy_arr = [], y_pos = [];
@@ -161,7 +168,7 @@
         let W_grid = [], H_grid = [], I_grid = [], BL_grid = [];
         let activePillMask = Array.from({length: rows}, () => Array(N).fill(true));
 
-        if (layoutMode === 'line' && swaps) {
+        if (layoutMode === 'timeline' && swaps) {
             for (let c = 0; c < N; c++) {
                 if (swaps[c]) activePillMask[0][c] = false; 
             }
@@ -177,8 +184,10 @@
                 W.push(pillLength * vLengths[r][c]);
                 let desired_H = (pillHeight / 2.0) * vHeights[r][c];
                 let safe_H = Math.min(desired_H, max_H - 0.5); 
-                H_arr.push(Math.max(h + 0.1, safe_H)); 
-                I_arr.push(vInclines[r][c] * (W[c] / 2));
+                let H_final = Math.max(h + 0.1, safe_H);
+                H_arr.push(H_final); 
+                // Incline logic tied to elementShape
+                I_arr.push(isSmoothPill ? H_final * 0.8625 : 0);
                 BL.push(bridgeGap * vGaps[r][c]);
             }
             W_grid.push(W); H_grid.push(H_arr); I_grid.push(I_arr); BL_grid.push(BL);
@@ -228,6 +237,7 @@
 
                     let newH = (pillHeight / 2.0) * (dotScale * 1.5);
                     H_grid[r][c] = Math.max(h + 0.1, Math.min(newH, max_H - 0.5));
+                    I_grid[r][c] = isSmoothPill ? H_grid[r][c] * 0.8625 : 0;
                     
                     if (dotScale < 0.10) activePillMask[r][c] = false;
                 }
@@ -237,24 +247,29 @@
         let next = new Map();
         let coords = new Map();
         const addLink = (r1, c1, p1, r2, c2, p2) => next.set(`${r1},${c1},${p1}`, `${r2},${c2},${p2}`);
-        const vMode = verticalModeOn && (layoutMode === 'pattern' || layoutMode === 'halftone');
+        const vMode = verticalModeOn && (layoutMode === 'ecosystem' || layoutMode === 'halftone');
 
         for (let r = 0; r < rows; r++) {
             for (let c = 0; c < N; c++) {
                 let cx = cx_grid[r][c], cy = cy_arr[r];
                 let angleRad = 0;
 
-                if (layoutMode === 'line') {
-                    let startX = cx_grid[r][0];
-                    let totalLength = cx_grid[r][N - 1] - startX;
-                    if (totalLength === 0) totalLength = 1;
-                    let normX = (cx - startX) / totalLength;
-                    
-                    cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+                let startX = cx_grid[r][0];
+                let totalLength = cx_grid[r][N - 1] - startX;
+                if (totalLength === 0) totalLength = 1;
 
-                    if (followWave) {
-                        let derivative = waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength);
-                        angleRad = Math.atan(derivative);
+                if (layoutMode === 'timeline') {
+                    if (timelineSubMode === 'wave') {
+                        let normX = (cx - startX) / totalLength;
+                        cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+                        angleRad = Math.atan(waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength));
+                    } else if (timelineSubMode === 'steps') {
+                        let t = N > 1 ? c / (N - 1) : 0;
+                        let totalH = stepDistance * (N - 1);
+                        if (stepComposition === 'up') cy -= c * stepDistance;
+                        else if (stepComposition === 'down') cy += c * stepDistance;
+                        else if (stepComposition === 'up-curve') cy -= Math.pow(t, 2) * totalH;
+                        else if (stepComposition === 'down-curve') cy += Math.pow(t, 2) * totalH;
                     }
                 }
 
@@ -266,8 +281,8 @@
 
                 let hasN = vMode && r > 0 && gridVBridges[r-1][c] && activePillMask[r-1][c] && activePillMask[r][c];
                 let hasS = vMode && r < rows - 1 && gridVBridges[r][c] && activePillMask[r+1][c] && activePillMask[r][c];
-                let hasW = c > 0 && (!vMode || gridHBridges[r][c-1]) && (activePillMask[r][c-1] || (layoutMode === 'line' && swaps && swaps[c-1])) && (activePillMask[r][c] || (layoutMode === 'line' && swaps && swaps[c]));
-                let hasE = c < N - 1 && (!vMode || gridHBridges[r][c]) && (activePillMask[r][c+1] || (layoutMode === 'line' && swaps && swaps[c+1])) && (activePillMask[r][c] || (layoutMode === 'line' && swaps && swaps[c]));
+                let hasW = c > 0 && (!vMode || gridHBridges[r][c-1]) && (activePillMask[r][c-1] || (layoutMode === 'timeline' && swaps && swaps[c-1])) && (activePillMask[r][c] || (layoutMode === 'timeline' && swaps && swaps[c]));
+                let hasE = c < N - 1 && (!vMode || gridHBridges[r][c]) && (activePillMask[r][c+1] || (layoutMode === 'timeline' && swaps && swaps[c+1])) && (activePillMask[r][c] || (layoutMode === 'timeline' && swaps && swaps[c]));
 
                 if (!isPillOn && !hasN && !hasS && !hasE && !hasW) continue;
 
@@ -351,7 +366,51 @@
                 }
 
                 if (hasE) {
-                    addLink(r, c, 'E_T', r, c+1, 'W_T');
+                    if (layoutMode === 'timeline' && timelineSubMode === 'wave' && wavyLine) {
+                        let segments = 20;
+                        let out_T_prev = 'E_T';
+                        
+                        let et_x = cx + (W/2 - inc*(h_bridge/H));
+                        let inc_next = I_grid[r][c+1];
+                        let wt_x = cx_grid[r][c+1] - (W_grid[r][c+1]/2 - inc_next*(h_bridge/H_grid[r][c+1]));
+                        
+                        for(let s=1; s<=segments; s++) {
+                            let t = s / (segments + 1);
+                            let id_T = `bridge_T_${r}_${c}_${s}`;
+                            let id_B = `bridge_B_${r}_${c}_${s}`;
+                            
+                            let sampleX_precise = et_x + t * (wt_x - et_x);
+                            let normX_samp = (sampleX_precise - startX) / totalLength;
+                            let sampleY = cy_arr[r] + Math.sin(normX_samp * waveFrequency * Math.PI * 2) * waveAmplitude;
+                            let dYdX = waveAmplitude * Math.cos(normX_samp * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength);
+                            let angle = Math.atan(dYdX);
+                            
+                            let sinAng = Math.sin(angle), cosAng = Math.cos(angle);
+                            
+                            let bTop = { x: sampleX_precise + h_bridge * sinAng, y: sampleY - h_bridge * cosAng, isSharp: true };
+                            let bBot = { x: sampleX_precise - h_bridge * sinAng, y: sampleY + h_bridge * cosAng, isSharp: true };
+                            
+                            coords.set(`${r},${c},${id_T}`, bTop);
+                            coords.set(`${r},${c},${id_B}`, bBot);
+                            
+                            addLink(r, c, out_T_prev, r, c, id_T);
+                            out_T_prev = id_T;
+                        }
+                        addLink(r, c, out_T_prev, r, c+1, 'W_T');
+                        
+                        let out_B_prev_id = 'W_B';
+                        let prev_r = r, prev_c = c+1;
+                        for(let s=segments; s>=1; s--) {
+                            let id_B = `bridge_B_${r}_${c}_${s}`;
+                            addLink(prev_r, prev_c, out_B_prev_id, r, c, id_B);
+                            prev_r = r; prev_c = c;
+                            out_B_prev_id = id_B;
+                        }
+                        addLink(prev_r, prev_c, out_B_prev_id, r, c, 'E_B');
+                    } else {
+                        addLink(r, c, 'E_T', r, c+1, 'W_T');
+                        addLink(r, c+1, 'W_B', r, c, 'E_B');
+                    }
                 } else {
                     if (infiniteEdges && c === N - 1) {
                         let capX = W/2 + HUGE_EXT;
@@ -374,9 +433,7 @@
                     }
                 }
 
-                if (hasW) {
-                    addLink(r, c, 'W_B', r, c-1, 'E_B');
-                } else {
+                if (!hasW) {
                     if (infiniteEdges && c === 0) {
                         let capX = -W/2 - HUGE_EXT;
                         coords.set(`${r},${c},Out_WB`, {x: cx + capX * cosA - (h_bridge) * sinA, y: cy + capX * sinA + (h_bridge) * cosA, isBridgeCorner: true});
@@ -436,16 +493,22 @@
                 let cx = cx_grid[r][c], cy = cy_arr[r];
                 let angleRad = 0;
 
-                if (layoutMode === 'line') {
-                    let startX = cx_grid[r][0];
-                    let totalLength = cx_grid[r][N - 1] - startX;
-                    if (totalLength === 0) totalLength = 1;
-                    let normX = (cx - startX) / totalLength;
-                    cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+                let startX = cx_grid[r][0];
+                let totalLength = cx_grid[r][N - 1] - startX;
+                if (totalLength === 0) totalLength = 1;
 
-                    if (followWave) {
-                        let derivative = waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength);
-                        angleRad = Math.atan(derivative);
+                if (layoutMode === 'timeline') {
+                    if (timelineSubMode === 'wave') {
+                        let normX = (cx - startX) / totalLength;
+                        cy += Math.sin(normX * waveFrequency * Math.PI * 2) * waveAmplitude;
+                        angleRad = Math.atan(waveAmplitude * Math.cos(normX * waveFrequency * Math.PI * 2) * (waveFrequency * Math.PI * 2 / totalLength));
+                    } else if (timelineSubMode === 'steps') {
+                        let t = N > 1 ? c / (N - 1) : 0;
+                        let totalH = stepDistance * (N - 1);
+                        if (stepComposition === 'up') cy -= c * stepDistance;
+                        else if (stepComposition === 'down') cy += c * stepDistance;
+                        else if (stepComposition === 'up-curve') cy -= Math.pow(t, 2) * totalH;
+                        else if (stepComposition === 'down-curve') cy += Math.pow(t, 2) * totalH;
                     }
 
                     if (r === 0 && swaps && swaps[c]) {
@@ -484,21 +547,18 @@
         if (minX === Infinity) { minX = -100; maxX = 100; minY = -100; maxY = 100; }
         if (rotation % 180 === 0) padX = 0; else if (rotation % 180 === 90) padY = 0;
 
-      } else if (layoutMode === 'loop') {
+      } else if (layoutMode === 'cycle') {
         const N = Math.max(3, shapeCount);
-        const isStar = starModeOn;
-        const K = isStar ? N * 2 : N;
+        const K = N;
         const A = 300;
         const R_out = A / Math.cos(Math.PI / N); 
-        const R_in = R_out * starRatio;
         const h_loop = h * 0.35;
         const loopScale = 0.35;
         
         const V = [];
         for(let i=0; i<K; i++) {
           let a = i * 2 * Math.PI / K;
-          let r = (!isStar || i%2 === 0) ? R_out : R_in;
-          V.push({x: r * Math.sin(a), y: -r * Math.cos(a)});
+          V.push({x: R_out * Math.sin(a), y: -R_out * Math.cos(a)});
         }
 
         const getIntersect = (p1, d1, p2, d2) => {
@@ -548,10 +608,10 @@
           if (x_tl > x_tr) { let mid = (x_tl + x_tr)/2; x_tl = mid; x_tr = mid; }
           if (x_bl > x_br) { let mid = (x_bl + x_br)/2; x_bl = mid; x_br = mid; }
           
-          let c = isStar ? Math.floor(i / 2) : i; 
+          let c = i; 
           let w_i = Math.min(L * 0.95, L * loopFillRatio * vLengths[0][c]);
           let ht = Math.max(h_loop + 0.1, (pillHeight / 2.0) * loopScale * vHeights[0][c]);
-          let inc_i = vInclines[0][c] * (w_i / 2);
+          let inc_i = isSmoothPill ? ht * 0.8625 : 0;
           let maxOffset = (L - w_i) / 2.0 - 0.1;
           let offset_i = Math.max(-maxOffset, Math.min(maxOffset, (vGaps[0][c] - 1) * (L/4)));
           
@@ -620,8 +680,7 @@
       let centerY = minY - padY + contentH / 2;
       let finalSquareSize = squareSize;
       
-      // Force perfectly centered ViewBox in loop mode to prevent any wobble during rotations
-      if (layoutMode === 'loop') {
+      if (layoutMode === 'cycle') {
           centerX = 0;
           centerY = 0;
           finalSquareSize = Math.max(Math.abs(maxX), Math.abs(minX), Math.abs(maxY), Math.abs(minY)) * 2 + 2 * Math.max(padX, padY);
@@ -652,7 +711,6 @@
       Shuffle: <><path d="M2 18h1.4c1.3 0 2.5-.6 3.3-1.7l6.1-8.6c.7-1.1 2-1.7 3.3-1.7H22"/><path d="m18 2 4 4-4 4"/><path d="M2 6h1.9c1.5 0 2.9.9 3.6 2.2"/><path d="M22 18h-5.9c-1.3 0-2.6-.7-3.3-1.8l-.5-.8"/><path d="m18 14 4 4-4 4"/></>,
       Activity: <><path d="M22 12h-2.48a2 2 0 0 0-1.93 1.46l-2.35 8.36a.25.25 0 0 1-.48 0L9.24 2.18a.25.25 0 0 0-.48 0l-2.35 8.36A2 2 0 0 1 4.49 12H2"/></>,
       RefreshCcw: <><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 21v-5h5"/></>,
-      Image: <><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></>,
       Component: <><path d="M5.5 8.5 9 12l-3.5 3.5L2 12l3.5-3.5Z"/><path d="M12 2l3.5 3.5L12 9 8.5 5.5 12 2Z"/><path d="M18.5 8.5 22 12l-3.5 3.5L15 12l3.5-3.5Z"/><path d="M12 15l3.5 3.5L12 22l-3.5-3.5L12 15Z"/></>,
       Trash: <><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></>,
       Undo: <><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"/></>,
@@ -663,19 +721,18 @@
       <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>{IconPaths[name]}</svg>
     );
 
-    const PolygonIcon = ({ n, active, onClick }) => {
-      const pts = [];
-      for(let i=0; i<n; i++) {
-        let a = i * 2 * Math.PI / n - Math.PI/2;
-        pts.push(`${12 + 8*Math.cos(a)},${12 + 8*Math.sin(a)}`);
-      }
-      return (
-        <button onClick={onClick} className={`p-2 rounded border transition-all flex flex-col items-center justify-center gap-1.5 ${active ? 'bg-indigo-50 border-indigo-400 text-indigo-700 shadow-sm' : 'bg-white border-neutral-200 text-neutral-500 hover:border-neutral-400 hover:text-neutral-700'}`}>
-          <svg width="20" height="20" viewBox="0 0 24 24"><polygon points={pts.join(' ')} fill="none" stroke="currentColor" strokeWidth="2" strokeLinejoin="round" /></svg>
-          <span className="text-[10px] font-bold leading-none">{n} Sides</span>
+    const ShapePreview = ({ type, active, onClick }) => (
+        <button onClick={onClick} className={`flex-1 p-3 rounded-lg border-2 flex flex-col items-center gap-2 transition-all ${active ? 'border-indigo-500 bg-indigo-50 shadow-sm' : 'border-neutral-200 bg-white hover:border-neutral-300 shadow-sm'}`}>
+            <svg width="60" height="20" viewBox="0 0 100 40">
+            {type === 'rounded-rect' ? (
+                <rect x="5" y="5" width="90" height="30" rx="10" fill="currentColor" className={active ? 'text-indigo-600' : 'text-neutral-400'} />
+            ) : (
+                <path d="M 25 5 L 75 5 A 15 15 0 0 1 75 35 L 25 35 A 15 15 0 0 1 25 5 Z" fill="currentColor" className={active ? 'text-indigo-600' : 'text-neutral-400'} />
+            )}
+            </svg>
+            <span className={`text-[10px] font-bold ${active ? 'text-indigo-700' : 'text-neutral-500'}`}>{type === 'rounded-rect' ? 'Rounded Rect' : 'Smooth Pill'}</span>
         </button>
-      );
-    };
+    );
 
     const ColorSwatch = ({ color, selected, disabled, onClick }) => (
       <button onClick={() => !disabled && onClick(color)} className={`w-8 h-8 rounded-full border-2 transition-all shrink-0 ${selected ? 'border-white outline outline-2 outline-indigo-400 scale-110 shadow-md' : disabled ? 'border-transparent opacity-20 cursor-not-allowed' : 'border-transparent hover:scale-110 shadow-sm'}`} style={{ backgroundColor: color }} title={color} />
@@ -713,28 +770,35 @@
       { id: 'lib-4', name: 'Shape 4', viewBox: '0 0 176 226', inner: '<path d="M113 0C135.218 0 155.938 6.4128 173.411 17.4881C178.163 20.5 173.711 27.9576 168.145 27.1419C164.003 26.535 159.766 26.2207 155.455 26.2207C107.528 26.2207 68.6758 65.0733 68.6758 113C68.6758 160.927 107.528 199.779 155.455 199.779C159.766 199.779 164.003 199.465 168.145 198.858C173.712 198.042 178.163 205.499 173.412 208.511C155.939 219.587 135.219 226 113 226C50.5919 226 0 175.408 0 113C0 50.5919 50.5919 0.000102084 113 0Z" />' }
     ];
 
+    const colorPalettes = [
+        { label: 'Core Tawuniya', colors: ['#34295E', '#6B47F5', '#F2D2FF', '#BC96FC', '#FBEBFF', '#120449'] },
+        { label: 'Extended', colors: ['#120449', '#1E0D60', '#2A1678', '#372090', '#4429A9', '#5133C2', '#5E3DDC', '#6B47F5', '#805DF3', '#9C7BF4', '#BC96FC', '#D1AEFF', '#E2C1FF', '#F2D2FF', '#FBEBFF'] },
+        { label: 'B2C', colors: ['#1A2E1C', '#1F4026', '#225432', '#246A42', '#278354', '#2DA067', '#32BE7A', '#42D18E', '#51DDAE', '#62E7CC', '#74EFE6', '#8AF5F6', '#A4F8FA', '#BFFAFD', '#DBFCFF'] },
+        { label: 'B2B', colors: ['#282222', '#382E2E', '#483A3A', '#594646', '#6A5151', '#7C5A59', '#92635C', '#A8715F', '#B88368', '#C79872', '#D2A881', '#DCB692', '#E5C4A5', '#EDD2B8', '#F4E0CD'] },
+        { label: 'B2G', colors: ['#273449', '#35435B', '#4A576C', '#556174', '#646E80', '#727C8C', '#808998', '#8E97A5', '#9CA4B1', '#AAB1BD', '#B8BFC9', '#C7CCD5', '#D5D9E1', '#E3E7ED', '#F1F4F9'] }
+    ];
+    const allColors = Array.from(new Set(colorPalettes.flatMap(p => p.colors)));
+
     const App = () => {
       // Main Logic Parameters
-      const [layoutMode, setLayoutMode] = useState('line'); 
-      const [lineCount, setLineCount] = useState(3);
-      const [loopCount, setLoopCount] = useState(6);
+      const [layoutMode, setLayoutMode] = useState('timeline'); // timeline, cycle, ecosystem
+      const [timelineSubMode, setTimelineSubMode] = useState('straight'); // straight, wave, steps
+      const [wavyLine, setWavyLine] = useState(false);
+      const [stepComposition, setStepComposition] = useState('up'); // up, down, up-curve, down-curve
+      const [stepDistance, setStepDistance] = useState(100);
+
+      const [lineCount, setLineCount] = useState(3); // reused for elements count
+      const [loopCount, setLoopCount] = useState(6); // sides for cycle
       const [patternRowCount, setPatternRowCount] = useState(5);
-      const [inclineRatio, setInclineRatio] = useState(0.20); 
-      const [roundingRatio, setRoundingRatio] = useState(1.0);
-      const [intersectionSmoothness, setIntersectionSmoothness] = useState(6); 
-      const [vBridgeRoundingRatio, setVBridgeRoundingRatio] = useState(1.0);
+      
+      const [elementShape, setElementShape] = useState('smooth-pill'); // rounded-rect, smooth-pill
+      
       const [rotation, setRotation] = useState(0); 
       const [infiniteEdges, setInfiniteEdges] = useState(true);
-      const [outerRoundingRatio, setOuterRoundingRatio] = useState(1.0);
       const [verticalModeOn, setVerticalModeOn] = useState(false);
-      
-      // Star Mode specific (Loop only)
-      const [starModeOn, setStarModeOn] = useState(false);
-      const [starRatio, setStarRatio] = useState(0.5);
 
-      const [waveFrequency, setWaveFrequency] = useState(0);
-      const [waveAmplitude, setWaveAmplitude] = useState(0);
-      const [followWave, setFollowWave] = useState(false);
+      const [waveFrequency, setWaveFrequency] = useState(1);
+      const [waveAmplitude, setWaveAmplitude] = useState(100);
 
       // Halftone specific
       const [halftonePixels, setHalftonePixels] = useState(generateDefaultHalftone());
@@ -745,10 +809,10 @@
       const [swaps, setSwaps] = useState({});
       const [selectedSwapIdx, setSelectedSwapIdx] = useState(0);
 
-      const shapeCount = layoutMode === 'line' ? lineCount : (layoutMode === 'loop' ? loopCount : lineCount);
+      const shapeCount = layoutMode === 'timeline' ? lineCount : (layoutMode === 'cycle' ? loopCount : lineCount);
 
       useEffect(() => {
-          if (selectedSwapIdx >= shapeCount) setSelectedSwapIdx(Math.max(0, shapeCount - 1));
+        if (selectedSwapIdx >= shapeCount) setSelectedSwapIdx(Math.max(0, shapeCount - 1));
       }, [shapeCount, selectedSwapIdx]);
 
       // Grid Connection States
@@ -769,7 +833,6 @@
       const [vHeights, setVHeights] = useState(createGrid(80, 40, 1));
       const [vLengths, setVLengths] = useState(createGrid(80, 40, 1));
       const [vGaps, setVGaps] = useState(createGrid(80, 40, 1));
-      const [vInclines, setVInclines] = useState(createGrid(80, 40, 0.20));
       const [activeVarTab, setActiveVarTab] = useState('rowGap');
 
       // Interaction States
@@ -777,11 +840,6 @@
       const [selectedRow, setSelectedRow] = useState(null);
 
       // Colors
-      const palette = [
-        '#F8F5FF', '#EDE9FE', '#D9D2F6', '#C4B5FD', '#A78BFA', 
-        '#8B5CF6', '#A270FF', '#7E40FF', '#7C3AED', '#6D28D9', 
-        '#5B21B6', '#4C1D95', '#3E2568', '#2E1065', '#170633'
-      ];
       const [bgColor, setBgColor] = useState('#D9D2F6');
       const [shapeSolidColor, setShapeSolidColor] = useState('#3E2568');
 
@@ -807,30 +865,29 @@
       };
 
       const captureState = () => ({
-          layoutMode, lineCount, loopCount, patternRowCount, inclineRatio,
-          roundingRatio, intersectionSmoothness, vBridgeRoundingRatio, rotation, infiniteEdges,
-          outerRoundingRatio, verticalModeOn, waveFrequency, waveAmplitude, followWave,
+          layoutMode, timelineSubMode, wavyLine, stepComposition, stepDistance,
+          lineCount, loopCount, patternRowCount, elementShape,
+          rotation, infiniteEdges, verticalModeOn, waveFrequency, waveAmplitude,
           pillLength, bridgeGap, pillHeight, bridgeThickness, patternRowSpacing, loopFillRatio,
           gridPills, gridHBridges, gridVBridges, vRowSpacings, vHeights, vLengths,
-          vGaps, vInclines, bgColor, shapeSolidColor, library, swaps, starModeOn, starRatio
+          vGaps, bgColor, shapeSolidColor, library, swaps
       });
 
       const applyState = (state) => {
           if (state.layoutMode) setLayoutMode(state.layoutMode);
+          if (state.timelineSubMode) setTimelineSubMode(state.timelineSubMode);
+          if (state.wavyLine !== undefined) setWavyLine(state.wavyLine);
+          if (state.stepComposition) setStepComposition(state.stepComposition);
+          if (state.stepDistance !== undefined) setStepDistance(state.stepDistance);
           if (state.lineCount !== undefined) setLineCount(state.lineCount);
           if (state.loopCount !== undefined) setLoopCount(state.loopCount);
           if (state.patternRowCount !== undefined) setPatternRowCount(state.patternRowCount);
-          if (state.inclineRatio !== undefined) setInclineRatio(state.inclineRatio);
-          if (state.roundingRatio !== undefined) setRoundingRatio(state.roundingRatio);
-          if (state.intersectionSmoothness !== undefined) setIntersectionSmoothness(state.intersectionSmoothness);
-          if (state.vBridgeRoundingRatio !== undefined) setVBridgeRoundingRatio(state.vBridgeRoundingRatio);
+          if (state.elementShape) setElementShape(state.elementShape);
           if (state.rotation !== undefined) setRotation(state.rotation);
           if (state.infiniteEdges !== undefined) setInfiniteEdges(state.infiniteEdges);
-          if (state.outerRoundingRatio !== undefined) setOuterRoundingRatio(state.outerRoundingRatio);
           if (state.verticalModeOn !== undefined) setVerticalModeOn(state.verticalModeOn);
           if (state.waveFrequency !== undefined) setWaveFrequency(state.waveFrequency);
           if (state.waveAmplitude !== undefined) setWaveAmplitude(state.waveAmplitude);
-          if (state.followWave !== undefined) setFollowWave(state.followWave);
           if (state.pillLength !== undefined) setPillLength(state.pillLength);
           if (state.bridgeGap !== undefined) setBridgeGap(state.bridgeGap);
           if (state.pillHeight !== undefined) setPillHeight(state.pillHeight);
@@ -844,13 +901,10 @@
           if (state.vHeights) setVHeights(state.vHeights);
           if (state.vLengths) setVLengths(state.vLengths);
           if (state.vGaps) setVGaps(state.vGaps);
-          if (state.vInclines) setVInclines(state.vInclines);
           if (state.bgColor) setBgColor(state.bgColor);
           if (state.shapeSolidColor) setShapeSolidColor(state.shapeSolidColor);
           if (state.library) setLibrary(state.library);
           if (state.swaps) setSwaps(state.swaps);
-          if (state.starModeOn !== undefined) setStarModeOn(state.starModeOn);
-          if (state.starRatio !== undefined) setStarRatio(state.starRatio);
       };
 
       useEffect(() => {
@@ -912,18 +966,18 @@
       const handleLayoutMode = (mode) => {
         setLayoutMode(mode);
         setSelectedRow(null);
-        if (mode === 'line') {
-          setLineCount(Math.min(lineCount, 8));
+        if (mode === 'timeline') {
+          setLineCount(Math.min(lineCount, 20));
           setPillLength(Math.max(40, pillLength));
-          setPillHeight(Math.max(10, pillHeight));
-        } else if (mode === 'pattern') {
+          setPillHeight(Math.max(40, pillHeight));
+        } else if (mode === 'ecosystem') {
           setLineCount(Math.min(lineCount, 10));
           setPatternRowCount(Math.min(patternRowCount, 20));
         } else if (mode === 'halftone') {
           setLineCount(Math.max(10, Math.min(lineCount, 40)));
           setPatternRowCount(Math.max(10, Math.min(patternRowCount, 80)));
         }
-        if (mode !== 'pattern' && activeVarTab === 'rowGap') setActiveVarTab('height');
+        if (mode !== 'ecosystem' && activeVarTab === 'rowGap') setActiveVarTab('height');
       };
 
       const handleImageUpload = (e) => {
@@ -1006,11 +1060,6 @@
         e.target.value = null;
       };
 
-      const handleGlobalIncline = (val) => {
-        setInclineRatio(val);
-        setVInclines(createGrid(80, 40, val));
-      };
-
       const getPresetArray = (type, min, max, base, count) => {
         const arr = Array(80).fill(base);
         for(let i=0; i<count; i++) {
@@ -1066,24 +1115,31 @@
       };
 
       const handleRandomiseColors = () => {
-        const bgIdx = Math.floor(Math.random() * palette.length);
-        setBgColor(palette[bgIdx]);
-        const validFg = palette.filter((_, idx) => Math.abs(idx - bgIdx) >= 2);
-        setShapeSolidColor(validFg[Math.floor(Math.random() * validFg.length)]);
+        const pIdx = Math.floor(Math.random() * colorPalettes.length);
+        const palette = colorPalettes[pIdx].colors;
+        const bgI = Math.floor(Math.random() * palette.length);
+        setBgColor(palette[bgI]);
+        const validFg = palette.filter((_, idx) => Math.abs(idx - bgI) >= 2);
+        if (validFg.length > 0) {
+            setShapeSolidColor(validFg[Math.floor(Math.random() * validFg.length)]);
+        } else {
+            setShapeSolidColor(palette[(bgI + 2) % palette.length]);
+        }
       };
 
       const handleResetAll = () => {
         savePreState();
-        setLayoutMode('line');
+        setLayoutMode('timeline');
+        setTimelineSubMode('straight');
+        setWavyLine(false);
+        setStepComposition('up');
+        setStepDistance(100);
         setLineCount(3);
         setLoopCount(6);
         setPatternRowCount(5);
-        setInclineRatio(0.20);
-        setRoundingRatio(1.0);
-        setVBridgeRoundingRatio(1.0);
+        setElementShape('smooth-pill');
         setRotation(0);
         setInfiniteEdges(true);
-        setOuterRoundingRatio(1.0);
         setVerticalModeOn(false);
         setPillLength(450);
         setBridgeGap(180);
@@ -1091,12 +1147,9 @@
         setBridgeThickness(4);
         setPatternRowSpacing(250);
         setLoopFillRatio(0.65);
-        setWaveFrequency(0);
-        setWaveAmplitude(0);
-        setFollowWave(false);
+        setWaveFrequency(1);
+        setWaveAmplitude(100);
         setSwaps({});
-        setStarModeOn(false);
-        setStarRatio(0.5);
 
         setGridPills(createGrid(80, 40, true));
         setGridHBridges(createGrid(80, 40, true));
@@ -1106,7 +1159,6 @@
         setVHeights(createGrid(80, 40, 1));
         setVLengths(createGrid(80, 40, 1));
         setVGaps(createGrid(80, 40, 1));
-        setVInclines(createGrid(80, 40, 0.20));
 
         setBgColor('#D9D2F6');
         setShapeSolidColor('#3E2568');
@@ -1116,7 +1168,7 @@
 
       const handleRandomise = (isDynamic, forceMode = null) => {
         savePreState();
-        const modeList = ['line', 'loop', 'pattern']; 
+        const modeList = ['timeline', 'cycle', 'ecosystem']; 
         const mode = forceMode || modeList[Math.floor(Math.random() * modeList.length)];
         setLayoutMode(mode);
         setSelectedRow(null);
@@ -1124,135 +1176,110 @@
         setVerticalModeOn(false);
         setSwaps({});
 
-        let newIncline = 0.20;
         let newShapeCount = shapeCount;
-        let newWaveFreq = 0;
-        let newRotation = Math.floor(Math.random() * 8) * 45;
+        let newWaveFreq = 1;
+        let newRotation = Math.floor(Math.random() * 16) * 22.5;
 
-        if (mode === 'line' || mode === 'pattern') {
-          newShapeCount = Math.floor(Math.random() * (mode === 'pattern' ? 10 : 8)) + 1;
+        if (mode === 'timeline' || mode === 'ecosystem') {
+          newShapeCount = Math.floor(Math.random() * (mode === 'ecosystem' ? 10 : 8)) + 1;
           setLineCount(newShapeCount);
-          newIncline = Math.random() * 0.70 + 0.10; 
-          setRoundingRatio(Math.random() * 0.20 + 0.80); 
-          setVBridgeRoundingRatio(Math.random() * 0.50 + 0.50); 
+          setElementShape(Math.random() > 0.5 ? 'smooth-pill' : 'rounded-rect');
           setBridgeGap(Math.floor(Math.random() * 641) + 160); 
           const pH = Math.floor(Math.random() * 321) + 80; 
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
           
-          if (mode === 'pattern') {
+          if (mode === 'ecosystem') {
             setPillLength(Math.floor(Math.random() * 301) + 100); 
-          } else {
-            setPillLength(Math.floor(Math.random() * 601) + 400); 
-          }
-
-          if (mode === 'pattern') {
             setPatternRowCount(Math.floor(Math.random() * 16) + 5); 
             setPatternRowSpacing(Math.floor(Math.random() * 400) + 100);
             
             setGridPills(createGrid(80, 40, true)); 
             setGridHBridges(createGrid(80, 40, true)); 
             setGridVBridges(createGrid(80, 40, false));
-            setWaveFrequency(0);
-            setWaveAmplitude(0);
-            setFollowWave(false);
-          } else if (mode === 'line') {
-             if (Math.random() > 0.5) {
-                newWaveFreq = Math.floor(Math.random() * 5) + 1;
-                setWaveFrequency(newWaveFreq);
+          } else if (mode === 'timeline') {
+             setPillLength(Math.floor(Math.random() * 601) + 400); 
+             if (Math.random() > 0.6) {
+                setTimelineSubMode('wave');
+                setWaveFrequency(Math.floor(Math.random() * 3) + 1);
                 setWaveAmplitude(Math.floor(Math.random() * 400) + 100);
-                setFollowWave(Math.random() > 0.5);
+                setWavyLine(Math.random() > 0.5);
+             } else if (Math.random() > 0.5) {
+                setTimelineSubMode('steps');
+                setStepDistance(Math.floor(Math.random() * 300) + 50);
+                const comps = ['up', 'down', 'up-curve', 'down-curve'];
+                setStepComposition(comps[Math.floor(Math.random() * comps.length)]);
              } else {
-                setWaveFrequency(0);
-                setWaveAmplitude(0);
-                setFollowWave(false);
+                setTimelineSubMode('straight');
              }
           }
-        } else if (mode === 'loop') {
-          newShapeCount = Math.floor(Math.random() * 8) + 3;
+        } else if (mode === 'cycle') {
+          newShapeCount = Math.floor(Math.random() * 15) + 3;
           setLoopCount(newShapeCount);
-          newIncline = Math.random() * 0.50 + 0.30; 
-          setRoundingRatio(Math.random() * 0.40 + 0.60); 
+          setElementShape(Math.random() > 0.5 ? 'smooth-pill' : 'rounded-rect');
           setLoopFillRatio(Math.random() * 0.70 + 0.20); 
           const pH = Math.floor(Math.random() * 121) + 80; 
           setPillHeight(pH);
           const thickMax = Math.min(7, Math.max(4, pH - 1)); 
           setBridgeThickness(Math.floor(Math.random() * (thickMax - 4 + 1)) + 4); 
-          setWaveFrequency(0);
-          setWaveAmplitude(0);
-          setFollowWave(false);
-          if (Math.random() > 0.6) {
-              setStarModeOn(true);
-              setStarRatio(Math.random() * 0.6 + 0.2);
-          } else {
-              setStarModeOn(false);
-          }
         }
 
-        setInclineRatio(newIncline);
         setRotation(newRotation); 
-        setOuterRoundingRatio(1.0);
 
-        let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1), nI = createGrid(80, 40, newIncline);
+        let nH = createGrid(80, 40, 1), nL = createGrid(80, 40, 1);
         let nRS = Array(80).fill(1);
         let nG = [...vGaps]; 
 
         if (isDynamic) {
-          const presets = ['gradual', 'wave']; // Restricted to gradual and wave
-          const rows = mode === 'pattern' ? 40 : 1;
-          const isAlternate = mode === 'pattern' && Math.random() > 0.5;
+          const presets = ['gradual', 'wave'];
+          const rows = mode === 'ecosystem' ? 40 : 1;
+          const isAlternate = mode === 'ecosystem' && Math.random() > 0.5;
 
           let pA = presets[Math.floor(Math.random() * presets.length)];
           let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
           let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, newShapeCount);
-          let arrA_I = getPresetArray(pA, 0.0, 0.9, newIncline, newShapeCount);
 
           let pB = presets[Math.floor(Math.random() * presets.length)];
           let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_H;
           let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, newShapeCount) : arrA_L;
-          let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, newIncline, newShapeCount) : arrA_I;
 
           for(let r=0; r<rows; r++) {
               nH[r] = r % 2 === 0 ? arrA_H : arrB_H;
               nL[r] = r % 2 === 0 ? arrA_L : arrB_L;
-              nI[r] = r % 2 === 0 ? arrA_I : arrB_I;
           }
-          if (mode === 'pattern') nRS = getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, 39);
+          if (mode === 'ecosystem') nRS = getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, 39);
         }
 
-        setVHeights(nH); setVLengths(nL); setVInclines(nI); setVRowSpacings(nRS);
+        setVHeights(nH); setVLengths(nL); setVRowSpacings(nRS);
         handleRandomiseColors();
         setHistoryTrigger(t => t + 1);
       };
 
       const handleRandomiseVariations = () => {
         savePreState();
-        const presets = ['gradual', 'wave']; // Restricted to gradual and wave
-        const rows = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
-        const isAlternate = layoutMode === 'pattern' && Math.random() > 0.5;
+        const presets = ['gradual', 'wave'];
+        const rows = (layoutMode === 'ecosystem' || layoutMode === 'halftone') ? patternRowCount : 1;
+        const isAlternate = layoutMode === 'ecosystem' && Math.random() > 0.5;
 
         let pA = presets[Math.floor(Math.random() * presets.length)];
         let arrA_H = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
         let arrA_L = getPresetArray(pA, 0.3, 2.0, 1, shapeCount);
-        let arrA_I = getPresetArray(pA, 0.0, 0.9, inclineRatio, shapeCount);
         let arrA_G = Array(40).fill(1);
 
         let pB = presets[Math.floor(Math.random() * presets.length)];
         let arrB_H = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_H;
         let arrB_L = isAlternate ? getPresetArray(pB, 0.3, 2.0, 1, shapeCount) : arrA_L;
-        let arrB_I = isAlternate ? getPresetArray(pB, 0.0, 0.9, inclineRatio, shapeCount) : arrA_I;
         let arrB_G = Array(40).fill(1);
 
-        let newH = [...vHeights], newL = [...vLengths], newG = [...vGaps], newI = [...vInclines];
+        let newH = [...vHeights], newL = [...vLengths], newG = [...vGaps];
         for(let r=0; r<rows; r++) {
             newH[r] = r % 2 === 0 ? arrA_H : arrB_H;
             newL[r] = r % 2 === 0 ? arrA_L : arrB_L;
-            newI[r] = r % 2 === 0 ? arrA_I : arrB_I;
             newG[r] = r % 2 === 0 ? arrA_G : arrB_G;
         }
-        setVHeights(newH); setVLengths(newL); setVGaps(newG); setVInclines(newI);
-        if (layoutMode === 'pattern') setVRowSpacings(getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, patternRowCount - 1));
+        setVHeights(newH); setVLengths(newL); setVGaps(newG);
+        if (layoutMode === 'ecosystem') setVRowSpacings(getPresetArray(presets[Math.floor(Math.random() * presets.length)], 0.3, 2.0, 1, patternRowCount - 1));
         setHistoryTrigger(t => t + 1);
       };
 
@@ -1261,7 +1288,6 @@
         setVHeights(createGrid(80, 40, 1));
         setVLengths(createGrid(80, 40, 1));
         setVGaps(createGrid(80, 40, 1));
-        setVInclines(createGrid(80, 40, inclineRatio));
         setVRowSpacings(Array(80).fill(1));
         setHistoryTrigger(t => t + 1);
       };
@@ -1276,7 +1302,7 @@
       const handleConnectCols = () => { setGridPills(createGrid(80, 40, true)); setGridHBridges(createGrid(80, 40, false)); setGridVBridges(createGrid(80, 40, true)); };
 
       const isColorDisabled = (color, target) => {
-        const bgIdx = palette.indexOf(bgColor), fgIdx = palette.indexOf(shapeSolidColor), colorIdx = palette.indexOf(color);
+        const bgIdx = allColors.indexOf(bgColor), fgIdx = allColors.indexOf(shapeSolidColor), colorIdx = allColors.indexOf(color);
         if (colorIdx === -1) return false;
         if (target === 'bg') return fgIdx === -1 ? color === shapeSolidColor : Math.abs(colorIdx - fgIdx) < 2;
         if (target === 'shapeSolid') return bgIdx === -1 ? color === bgColor : Math.abs(colorIdx - bgIdx) < 2;
@@ -1285,17 +1311,15 @@
 
       // Core generation logic
       const { pathDataArray, swapCenters, viewBox } = generateGeometry({
-        layoutMode, shapeCount, patternRowCount, patternRowSpacing,
-        pillLength, pillHeight, bridgeThickness, bridgeGap,
-        roundingRatio, outerRoundingRatio, vBridgeRoundingRatio,
-        loopFillRatio, rotation, infiniteEdges, verticalModeOn,
-        vLengths, vHeights, vInclines, vGaps, vRowSpacings,
+        layoutMode, timelineSubMode, wavyLine, stepComposition, stepDistance, shapeCount, patternRowCount, patternRowSpacing,
+        pillLength, pillHeight, bridgeThickness, bridgeGap, elementShape,
+        loopFillRatio, rotation, infiniteEdges: layoutMode === 'timeline' ? true : infiniteEdges, verticalModeOn,
+        vLengths, vHeights, vGaps, vRowSpacings,
         gridPills, gridHBridges, gridVBridges, halftonePixels,
-        waveFrequency, waveAmplitude, followWave, swaps, library,
-        starModeOn, starRatio
+        waveFrequency, waveAmplitude, swaps, library
       });
 
-      const svgPathsMarkup = verticalModeOn || layoutMode !== 'pattern' 
+      const svgPathsMarkup = verticalModeOn || layoutMode !== 'ecosystem' 
         ? `<path d="${pathDataArray.join(" ")}" fill="${shapeSolidColor}" fill-rule="evenodd" />`
         : pathDataArray.map(d => `<path d="${d}" fill="${shapeSolidColor}" fill-rule="evenodd" />`).join('\n      ');
 
@@ -1316,14 +1340,7 @@
       }).join('\n      ');
         
 const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="1080" height="1080" style="background-color: ${bgColor}; overflow: visible;">
-  <defs>
-    <filter id="goo-export">
-      <feGaussianBlur in="SourceGraphic" stdDeviation="${intersectionSmoothness}" result="blur" />
-      <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
-      <feBlend in="SourceGraphic" in2="goo" mode="normal" />
-    </filter>
-  </defs>
-  <g filter="url(#goo-export)">
+  <g>
     ${svgPathsMarkup}
     ${swapMarkup}
   </g>
@@ -1356,7 +1373,6 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
       const varConfigs = {
         height: { state: vHeights, setter: setVHeights, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` },
         length: { state: vLengths, setter: setVLengths, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` },
-        incline: { state: vInclines, setter: setVInclines, min: 0.0, max: 0.9, step: 0.01, format: v => `${Math.round((v/0.9)*100)}%` },
         gap: { state: vGaps, setter: setVGaps, min: 0.3, max: 2.0, step: 0.01, format: v => `${Math.round(v*100)}%` }
       };
 
@@ -1413,7 +1429,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
         </div>
       );
 
-      const rowsToRender = (layoutMode === 'pattern' || layoutMode === 'halftone') ? patternRowCount : 1;
+      const rowsToRender = (layoutMode === 'ecosystem' || layoutMode === 'halftone') ? patternRowCount : 1;
       const activeConf = varConfigs[activeVarTab];
 
       return (
@@ -1423,9 +1439,9 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
           <div className="w-full md:w-[380px] bg-white border-r border-neutral-200 shadow-xl z-20 flex flex-col shrink-0 h-screen">
             <div className="flex-1 overflow-y-auto p-6 space-y-6 hide-scrollbar">
               <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200">
-                <button onClick={() => handleLayoutMode('line')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'line' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Route" size={14} /> Line</button>
-                <button onClick={() => handleLayoutMode('loop')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'loop' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Repeat" size={14} /> Loop</button>
-                <button onClick={() => handleLayoutMode('pattern')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'pattern' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Grid" size={14} /> Pattern</button>
+                <button onClick={() => handleLayoutMode('timeline')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'timeline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Route" size={14} /> Timeline</button>
+                <button onClick={() => handleLayoutMode('cycle')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'cycle' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Repeat" size={14} /> Cycle</button>
+                <button onClick={() => handleLayoutMode('ecosystem')} className={`flex-1 py-2 text-[10px] uppercase tracking-wider font-bold rounded-md flex items-center justify-center gap-1.5 transition-all ${layoutMode === 'ecosystem' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500 hover:text-neutral-700'}`}><Icon name="Grid" size={14} /> Ecosystem</button>
               </div>
 
               <div>
@@ -1436,17 +1452,25 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                 
                 {coreOpen && (
                   <div className="mt-4 space-y-6">
-                    {layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone' ? (
+                    {layoutMode === 'timeline' && (
+                      <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 mb-4">
+                        <button onClick={() => setTimelineSubMode('straight')} className={`flex-1 py-1.5 text-[10px] uppercase tracking-wider font-bold rounded transition-all ${timelineSubMode==='straight'?'bg-white shadow text-neutral-900':'text-neutral-500 hover:text-neutral-700'}`}>Straight</button>
+                        <button onClick={() => setTimelineSubMode('wave')} className={`flex-1 py-1.5 text-[10px] uppercase tracking-wider font-bold rounded transition-all ${timelineSubMode==='wave'?'bg-white shadow text-neutral-900':'text-neutral-500 hover:text-neutral-700'}`}>Wave</button>
+                        <button onClick={() => setTimelineSubMode('steps')} className={`flex-1 py-1.5 text-[10px] uppercase tracking-wider font-bold rounded transition-all ${timelineSubMode==='steps'?'bg-white shadow text-neutral-900':'text-neutral-500 hover:text-neutral-700'}`}>Steps</button>
+                      </div>
+                    )}
+
+                    {layoutMode === 'timeline' || layoutMode === 'ecosystem' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between items-end mb-2">
-                          <label className="text-xs font-semibold text-neutral-700">Amount of Shapes</label>
+                          <label className="text-xs font-semibold text-neutral-700">Amount of elements</label>
                           <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{lineCount}</span>
                         </div>
-                        <input type="range" min="1" max={layoutMode === 'halftone' ? 40 : (layoutMode === 'pattern' ? 10 : 8)} step="1" value={lineCount} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                        <input type="range" min="1" max={layoutMode === 'halftone' ? 40 : (layoutMode === 'ecosystem' ? 10 : 20)} step="1" value={lineCount} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLineCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     ) : null}
 
-                    {layoutMode === 'pattern' || layoutMode === 'halftone' ? (
+                    {layoutMode === 'ecosystem' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between items-end mb-2">
                           <label className="text-xs font-semibold text-neutral-700">Amount of Rows</label>
@@ -1456,135 +1480,99 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       </div>
                     ) : null}
 
-                    {layoutMode === 'line' && (
+                    {(layoutMode === 'timeline' || layoutMode === 'ecosystem' || layoutMode === 'cycle') && (
+                      <div>
+                         <label className="text-xs font-semibold text-neutral-700 block mb-3">Element shape</label>
+                         <div className="flex gap-2">
+                            <ShapePreview type="rounded-rect" active={elementShape === 'rounded-rect'} onClick={() => { setElementShape('rounded-rect'); setHistoryTrigger(t => t + 1); }} />
+                            <ShapePreview type="smooth-pill" active={elementShape === 'smooth-pill'} onClick={() => { setElementShape('smooth-pill'); setHistoryTrigger(t => t + 1); }} />
+                         </div>
+                      </div>
+                    )}
+
+                    {layoutMode === 'timeline' && timelineSubMode === 'wave' && (
                       <>
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
+                        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-4">
                             <div>
-                              <label className="text-xs font-semibold text-neutral-700">Wave Frequency</label>
-                              <p className="text-[10px] text-neutral-500">Number of bends</p>
+                                <div className="flex justify-between items-end mb-2">
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-700">Wave Frequency</label>
+                                    <p className="text-[10px] text-neutral-500">Number of full wave cycles</p>
+                                </div>
+                                <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveFrequency}</span>
+                                </div>
+                                <input type="range" min="1" max="5" step="1" value={waveFrequency} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveFrequency(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                             </div>
-                            <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveFrequency}</span>
-                          </div>
-                          <input type="range" min="0" max="10" step="0.1" value={waveFrequency} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveFrequency(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between items-end mb-2">
                             <div>
-                              <label className="text-xs font-semibold text-neutral-700">Wave Amplitude</label>
-                              <p className="text-[10px] text-neutral-500">Height of the bends</p>
+                                <div className="flex justify-between items-end mb-2">
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-700">Wave Amplitude</label>
+                                    <p className="text-[10px] text-neutral-500">Height of the bends</p>
+                                </div>
+                                <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveAmplitude}</span>
+                                </div>
+                                <input type="range" min="0" max="1000" step="10" value={waveAmplitude} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveAmplitude(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                             </div>
-                            <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{waveAmplitude}</span>
-                          </div>
-                          <input type="range" min="0" max="1000" step="10" value={waveAmplitude} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setWaveAmplitude(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                        </div>
-                        <div className="flex items-center justify-between pt-1">
-                          <div>
-                            <span className="text-xs font-semibold text-neutral-700">Rotate following the wave</span>
-                            <p className="text-[10px] text-neutral-500">Align elements to the wave angle</p>
-                          </div>
-                          <button onClick={() => { setFollowWave(!followWave); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${followWave ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
-                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${followWave ? 'translate-x-4' : 'translate-x-0'}`} />
-                          </button>
+                            <div className="flex items-center justify-between pt-2 border-t border-neutral-200">
+                                <div>
+                                <span className="text-xs font-semibold text-neutral-700">Wavy line</span>
+                                <p className="text-[10px] text-neutral-500">Curved connecting bridges</p>
+                                </div>
+                                <button onClick={() => { setWavyLine(!wavyLine); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${wavyLine ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
+                                <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${wavyLine ? 'translate-x-4' : 'translate-x-0'}`} />
+                                </button>
+                            </div>
                         </div>
                       </>
                     )}
 
-                    {layoutMode === 'loop' && (
-                      <div>
-                        <label className="text-xs font-semibold text-neutral-700 block mb-3">Polygon Structure</label>
-                        <div className="grid grid-cols-4 gap-2">
-                          {[3, 4, 5, 6, 7, 8, 9, 10].map(n => <PolygonIcon key={n} n={n} active={loopCount === n} onClick={() => { setLoopCount(n); setHistoryTrigger(t => t + 1); }} />)}
-                        </div>
-                        
-                        <div className="flex items-center justify-between pt-5 border-t border-neutral-200 mt-5">
-                          <div>
-                            <span className="text-xs font-semibold text-neutral-700">Star Mode</span>
-                            <p className="text-[10px] text-neutral-500">Create secondary inner corners</p>
-                          </div>
-                          <button onClick={() => { setStarModeOn(!starModeOn); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${starModeOn ? 'bg-indigo-600' : 'bg-neutral-300'}`}>
-                            <span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${starModeOn ? 'translate-x-4' : 'translate-x-0'}`} />
-                          </button>
-                        </div>
-
-                        {starModeOn && (
-                          <div>
-                            <div className="flex justify-between items-end mb-2 mt-4">
-                              <div>
-                                <label className="text-xs font-semibold text-neutral-700">Star Depth Ratio</label>
-                              </div>
-                              <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(starRatio * 100)}%</span>
+                    {layoutMode === 'timeline' && timelineSubMode === 'steps' && (
+                      <>
+                        <div className="p-3 bg-neutral-50 border border-neutral-200 rounded-lg space-y-4">
+                            <div>
+                                <label className="text-xs font-semibold text-neutral-700 block mb-2">Composition</label>
+                                <select value={stepComposition} onChange={e => { setStepComposition(e.target.value); setHistoryTrigger(t => t + 1); }} className="w-full text-xs bg-white border border-neutral-200 rounded p-1.5 font-bold outline-none cursor-pointer hover:border-indigo-300">
+                                    <option value="up">Upwards</option>
+                                    <option value="down">Downwards</option>
+                                    <option value="up-curve">Upwards Curve</option>
+                                    <option value="down-curve">Downwards Curve</option>
+                                </select>
                             </div>
-                            <input type="range" min="0.1" max="1.5" step="0.05" value={starRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setStarRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                          </div>
-                        )}
+                            <div>
+                                <div className="flex justify-between items-end mb-2">
+                                <div>
+                                    <label className="text-xs font-semibold text-neutral-700">Distance between steps</label>
+                                </div>
+                                <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{stepDistance}</span>
+                                </div>
+                                <input type="range" min="0" max="500" step="10" value={stepDistance} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setStepDistance(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                            </div>
+                        </div>
+                      </>
+                    )}
+
+                    {layoutMode === 'cycle' && (
+                      <div>
+                        <div className="flex justify-between items-end mb-2">
+                          <label className="text-xs font-semibold text-neutral-700">Amount of sides</label>
+                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{loopCount}</span>
+                        </div>
+                        <input type="range" min="3" max="40" step="1" value={loopCount} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLoopCount(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
 
                     <div>
                       <div className="flex justify-between items-end mb-2">
                         <div>
-                          <label className="text-xs font-semibold text-neutral-700">Shape Rotation</label>
-                          <p className="text-[10px] text-neutral-500">45° increments</p>
+                          <label className="text-xs font-semibold text-neutral-700">Angle</label>
+                          <p className="text-[10px] text-neutral-500">22.5° increments</p>
                         </div>
                         <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{rotation}°</span>
                       </div>
-                      <input type="range" min="0" max="315" step="45" value={rotation} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setRotation(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
+                      <input type="range" min="0" max="337.5" step="22.5" value={rotation} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setRotation(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                     </div>
 
-                    <div>
-                      <div className="flex justify-between items-end mb-2">
-                        <div>
-                          <label className="text-xs font-semibold text-neutral-700">Shape Incline (Edges)</label>
-                          <p className="text-[10px] text-neutral-500">0% Rectangles → 100% Diamonds</p>
-                        </div>
-                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round((inclineRatio / 0.9) * 100)}%</span>
-                      </div>
-                      <input type="range" min="0" max="0.9" step="0.01" value={inclineRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => handleGlobalIncline(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-end mb-2">
-                        <div>
-                          <label className="text-xs font-semibold text-neutral-700">Corner Rounding</label>
-                          <p className="text-[10px] text-neutral-500">0% Sharp → 100% Fully Round</p>
-                        </div>
-                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(roundingRatio * 100)}%</span>
-                      </div>
-                      <input type="range" min="0" max="1" step="0.01" value={roundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    </div>
-
-                    <div>
-                      <div className="flex justify-between items-end mb-2">
-                        <div>
-                          <label className="text-xs font-semibold text-neutral-700">Intersection Smoothness</label>
-                          <p className="text-[10px] text-neutral-500">Controls webbing where shapes meet the line</p>
-                        </div>
-                        <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{intersectionSmoothness}px</span>
-                      </div>
-                      <input type="range" min="1" max="24" step="1" value={intersectionSmoothness} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setIntersectionSmoothness(parseInt(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                    </div>
-
-                    {(layoutMode === 'pattern' || layoutMode === 'halftone') && (
-                      <div>
-                        <div className="flex justify-between items-end mb-2">
-                          <div>
-                            <label className="text-xs font-semibold text-neutral-700">Vertical Connection Rounding</label>
-                            <p className="text-[10px] text-neutral-500">0% Sharp → 100% Fully Round</p>
-                          </div>
-                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(vBridgeRoundingRatio * 100)}%</span>
-                        </div>
-                        <input type="range" min="0" max="1" step="0.01" value={vBridgeRoundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setVBridgeRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-3 gap-2 pt-2">
-                      <button onClick={() => { handleGlobalIncline(0); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Pills</button>
-                      <button onClick={() => { handleGlobalIncline(0.4); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Soft Hex</button>
-                      <button onClick={() => { handleGlobalIncline(0.9); setRoundingRatio(1); setHistoryTrigger(t => t + 1); }} className="py-1.5 px-1 text-[10px] uppercase tracking-wider font-bold rounded border transition-all bg-white border-neutral-200 text-neutral-600 hover:border-neutral-400">Waves</button>
-                    </div>
-
-                    {layoutMode === 'pattern' && (
+                    {layoutMode === 'ecosystem' && (
                       <div className="flex flex-col space-y-4 pt-4 border-t border-neutral-200">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-semibold text-neutral-700">Vertical Connections</span>
@@ -1628,23 +1616,10 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       </div>
                     )}
 
-                    {(layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') && (
+                    {(layoutMode === 'ecosystem' || layoutMode === 'halftone') && (
                       <div className="flex items-center justify-between pt-4 border-t border-neutral-200">
                         <span className="text-xs font-semibold text-neutral-700">Side Lines</span>
                         <button onClick={() => { setInfiniteEdges(!infiniteEdges); setHistoryTrigger(t => t + 1); }} className={`w-8 h-4 rounded-full relative transition-colors ${infiniteEdges ? 'bg-indigo-600' : 'bg-neutral-300'}`}><span className={`absolute left-0.5 top-0.5 bg-white w-3 h-3 rounded-full transition-transform ${infiniteEdges ? 'translate-x-4' : 'translate-x-0'}`} /></button>
-                      </div>
-                    )}
-
-                    {!infiniteEdges && (layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone') && (
-                      <div>
-                        <div className="flex justify-between items-end mb-2">
-                          <div>
-                            <label className="text-xs font-semibold text-neutral-700">Outer Edge Rounding</label>
-                            <p className="text-[10px] text-neutral-500">0% Sharp → 100% Fully Round</p>
-                          </div>
-                          <span className="text-xs font-mono text-indigo-600 bg-indigo-50 px-2 rounded">{Math.round(outerRoundingRatio * 100)}%</span>
-                        </div>
-                        <input type="range" min="0" max="1" step="0.01" value={outerRoundingRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setOuterRoundingRatio(parseFloat(e.target.value))} className="w-full h-2 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-indigo-600" />
                       </div>
                     )}
                   </div>
@@ -1662,27 +1637,27 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                 
                 {dimenOpen && (
                   <div className="mt-4 space-y-4">
-                    {layoutMode === 'line' || layoutMode === 'pattern' || layoutMode === 'halftone' ? (
+                    {layoutMode === 'timeline' || layoutMode === 'ecosystem' || layoutMode === 'halftone' ? (
                       <>
                         <div>
-                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Length</label><span className="text-xs text-neutral-400 font-mono">{pillLength}</span></div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Element Length</label><span className="text-xs text-neutral-400 font-mono">{pillLength}</span></div>
                           <input type="range" min="40" max="1000" step="1" value={pillLength} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPillLength(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                         <div>
-                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Bridge Gap</label><span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span></div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Distance between elements</label><span className="text-xs text-neutral-400 font-mono">{bridgeGap}</span></div>
                           <input type="range" min="0" max="800" step="1" value={bridgeGap} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setBridgeGap(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     ) : (
                       <>
                         <div>
-                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Pill Fill Amount</label><span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span></div>
+                          <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Element Fill Amount</label><span className="text-xs text-neutral-400 font-mono">{Math.round(loopFillRatio * 100)}%</span></div>
                           <input type="range" min="0.05" max="0.95" step="0.01" value={loopFillRatio} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setLoopFillRatio(parseFloat(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                         </div>
                       </>
                     )}
 
-                    {layoutMode === 'pattern' || layoutMode === 'halftone' ? (
+                    {layoutMode === 'ecosystem' || layoutMode === 'halftone' ? (
                       <div>
                         <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Row Spacing</label><span className="text-xs text-neutral-400 font-mono">{patternRowSpacing}</span></div>
                         <input type="range" min="50" max="1000" step="1" value={patternRowSpacing} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPatternRowSpacing(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
@@ -1690,14 +1665,16 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                     ) : null}
 
                     <div>
-                      <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Base Pill Height</label><span className="text-xs text-neutral-400 font-mono">{pillHeight}</span></div>
-                      <input type="range" min="80" max="400" step="1" value={pillHeight} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                      <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Element Height</label><span className="text-xs text-neutral-400 font-mono">{pillHeight}</span></div>
+                      <input type="range" min={layoutMode === 'timeline' ? 40 : (layoutMode === 'cycle' ? 20 : 80)} max={layoutMode === 'timeline' ? 1000 : 400} step="1" value={pillHeight} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setPillHeight(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
                     </div>
 
-                    <div>
-                      <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Bridge Thickness</label><span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span></div>
-                      <input type="range" min="1" max={Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
-                    </div>
+                    {(layoutMode === 'timeline' || layoutMode === 'ecosystem' || layoutMode === 'cycle' || layoutMode === 'halftone') && (
+                      <div>
+                        <div className="flex justify-between mb-1"><label className="text-xs font-medium text-neutral-600">Bridge Thickness</label><span className="text-xs text-neutral-400 font-mono">{bridgeThickness}</span></div>
+                        <input type="range" min={layoutMode === 'timeline' ? 4 : 1} max={layoutMode === 'timeline' ? 25 : Math.max(1, pillHeight - 1)} step="1" value={bridgeThickness} onMouseUp={() => setHistoryTrigger(t => t + 1)} onTouchEnd={() => setHistoryTrigger(t => t + 1)} onChange={(e) => setBridgeThickness(parseInt(e.target.value))} className="w-full h-1 bg-neutral-200 rounded-lg appearance-none cursor-pointer accent-neutral-500" />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1721,19 +1698,18 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       </div>
                     </div>
                     <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 overflow-x-auto hide-scrollbar">
-                      {(layoutMode === 'pattern' || layoutMode === 'halftone') && <button onClick={()=>setActiveVarTab('rowGap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'rowGap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Row Gap</button>}
+                      {(layoutMode === 'ecosystem' || layoutMode === 'halftone') && <button onClick={()=>setActiveVarTab('rowGap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'rowGap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Row Gap</button>}
                       <button onClick={()=>setActiveVarTab('height')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'height' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Height</button>
                       <button onClick={()=>setActiveVarTab('length')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'length' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Length</button>
-                      <button onClick={()=>setActiveVarTab('incline')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'incline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Incline</button>
-                      <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Left Gap</button>
+                      <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Gap</button>
                     </div>
 
-                    {activeVarTab === 'rowGap' && (layoutMode === 'pattern' || layoutMode === 'halftone') && render1DVarSliders(vRowSpacings, setVRowSpacings, 0.3, 3.0, 0.01, v => `${Math.round(v*100)}%`)}
+                    {activeVarTab === 'rowGap' && (layoutMode === 'ecosystem' || layoutMode === 'halftone') && render1DVarSliders(vRowSpacings, setVRowSpacings, 0.3, 3.0, 0.01, v => `${Math.round(v*100)}%`)}
 
                     {activeVarTab !== 'rowGap' && activeConf && Array(rowsToRender).fill(0).map((_, r) => (
                       <div key={r} className="mb-4 mt-2">
-                        {(layoutMode === 'pattern' || layoutMode === 'halftone') && <h4 className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-1 mt-4">Row {r + 1}</h4>}
-                        {renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, activeVarTab === 'incline' ? inclineRatio : 1, r)}
+                        {(layoutMode === 'ecosystem' || layoutMode === 'halftone') && <h4 className="text-[10px] uppercase tracking-wider font-bold text-neutral-500 mb-1 mt-4">Row {r + 1}</h4>}
+                        {renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, 1, r)}
                       </div>
                     ))}
                   </div>
@@ -1743,10 +1719,10 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
               <div className="h-px bg-neutral-200 w-full" />
 
               {/* Custom Objects Library Panel */}
-              {(layoutMode === 'line' || layoutMode === 'loop') && (
+              {(layoutMode === 'timeline' || layoutMode === 'cycle') && (
                   <div>
                     <button onClick={() => setObjectsOpen(!objectsOpen)} className="w-full flex items-center justify-between group py-2">
-                      <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Component" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Custom Objects ({layoutMode === 'line' ? 'Line' : 'Loop'} Mode)</h3>
+                      <h3 className="text-sm font-bold text-neutral-800 flex items-center gap-2"><Icon name="Component" size={16} className="text-neutral-400 group-hover:text-indigo-500 transition-colors" /> Custom Objects ({layoutMode === 'timeline' ? 'Timeline' : 'Cycle'} Mode)</h3>
                       {objectsOpen ? <Icon name="ChevronDown" size={16} className="text-neutral-400" /> : <Icon name="ChevronRight" size={16} className="text-neutral-400" />}
                     </button>
 
@@ -1796,7 +1772,7 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                   </div>
               )}
 
-              {layoutMode === 'line' && <div className="h-px bg-neutral-200 w-full" />}
+              {layoutMode === 'timeline' && <div className="h-px bg-neutral-200 w-full" />}
 
               {/* Colors Section */}
               <div>
@@ -1811,20 +1787,43 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
                       <label className="text-xs font-semibold text-neutral-700">Color Selection</label>
                       <button onClick={() => { savePreState(); handleRandomiseColors(); setHistoryTrigger(t => t + 1); }} className="text-[9px] uppercase font-bold text-indigo-600 bg-indigo-50 hover:bg-indigo-100 px-2 py-1 rounded flex items-center gap-1 transition-colors"><Icon name="Shuffle" size={10} /> Random Colors</button>
                     </div>
-                    <div>
-                      <label className="text-xs font-semibold text-neutral-700 block mb-2">Background Color</label>
-                      <div className="flex flex-wrap gap-2">
-                        {palette.map(c => <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />)}
-                        <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />
-                      </div>
-                    </div>
-                    <div className="h-px bg-neutral-100 w-full" />
-                    <div>
-                      <div className="flex justify-between items-center mb-2"><label className="text-xs font-semibold text-neutral-700">Shape Color</label></div>
-                      <div className="flex flex-wrap gap-2">
-                        {palette.map(c => <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />)}
-                        <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />
-                      </div>
+                    
+                    <div className="space-y-4">
+                        <div>
+                        <label className="text-xs font-semibold text-neutral-700 block mb-2">Background Color</label>
+                        <div className="space-y-3">
+                            {colorPalettes.map(palette => (
+                                <div key={`bg-${palette.label}`}>
+                                    <div className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-1.5">{palette.label}</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {palette.colors.map(c => <ColorSwatch key={`bg-${c}`} color={c} selected={bgColor === c} disabled={isColorDisabled(c, 'bg')} onClick={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />)}
+                                    </div>
+                                </div>
+                            ))}
+                            <div>
+                                <div className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-1.5">Custom</div>
+                                <CustomColorPicker color={bgColor} disabled={isColorDisabled(bgColor, 'bg')} onChange={(c) => { setBgColor(c); setHistoryTrigger(t => t + 1); }} />
+                            </div>
+                        </div>
+                        </div>
+                        <div className="h-px bg-neutral-100 w-full" />
+                        <div>
+                        <div className="flex justify-between items-center mb-2"><label className="text-xs font-semibold text-neutral-700">Shape Color</label></div>
+                        <div className="space-y-3">
+                            {colorPalettes.map(palette => (
+                                <div key={`fg-${palette.label}`}>
+                                    <div className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-1.5">{palette.label}</div>
+                                    <div className="flex flex-wrap gap-2">
+                                        {palette.colors.map(c => <ColorSwatch key={`solid-${c}`} color={c} selected={shapeSolidColor === c} disabled={isColorDisabled(c, 'shapeSolid')} onClick={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />)}
+                                    </div>
+                                </div>
+                            ))}
+                            <div>
+                                <div className="text-[10px] uppercase font-bold text-neutral-400 tracking-wider mb-1.5">Custom</div>
+                                <CustomColorPicker color={shapeSolidColor} disabled={isColorDisabled(shapeSolidColor, 'shapeSolid')} onChange={(c) => { setShapeSolidColor(c); setHistoryTrigger(t => t + 1); }} />
+                            </div>
+                        </div>
+                        </div>
                     </div>
                   </div>
                 )}
@@ -1878,21 +1877,13 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
             <div className="flex-1 relative w-full h-full overflow-hidden">
               <div className="absolute inset-0 flex items-center justify-center p-12">
 <svg xmlns="http://www.w3.org/2000/svg" viewBox={viewBox} className="w-full h-full" preserveAspectRatio="xMidYMid meet" style={{ overflow: 'visible' }}>
-  <defs>
-<filter id="goo-preview">
-  <feGaussianBlur in="SourceGraphic" stdDeviation={intersectionSmoothness} result="blur" />
-  <feColorMatrix in="blur" mode="matrix" values="1 0 0 0 0  0 1 0 0 0  0 0 1 0 0  0 0 0 19 -9" result="goo" />
-  <feBlend in="SourceGraphic" in2="goo" mode="normal" />
-</filter>
-  </defs>
-  
-  <g filter="url(#goo-preview)">
-    {verticalModeOn || layoutMode !== 'pattern' ? (
+  <g>
+    {verticalModeOn || layoutMode !== 'ecosystem' ? (
       <path d={pathDataArray.join(" ")} fill={shapeSolidColor} fillRule="evenodd" className="transition-all duration-300 ease-out" />
     ) : (
       pathDataArray.map((d, r) => (
         <path 
-        ey={r} d={d} fill={hoveredRow === r ? 'white' : shapeSolidColor} fillRule="evenodd" 
+        key={r} d={d} fill={hoveredRow === r ? 'white' : shapeSolidColor} fillRule="evenodd" 
         className="transition-all duration-300 ease-out cursor-pointer"
         style={{ opacity: hoveredRow !== null && hoveredRow !== r ? 0.5 : 1 }}
         onMouseEnter={() => setHoveredRow(r)} onMouseLeave={() => setHoveredRow(null)} onClick={() => setSelectedRow(r)}
@@ -1912,8 +1903,6 @@ const svgMarkup = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" 
        let innerHtml = libItem.inner.replace(/fill="[^"]*"/gi, 'fill="currentColor"');
        if (!innerHtml.includes('fill=')) innerHtml = `<g fill="currentColor">${innerHtml}</g>`;
 
-       let smoothness = sc.swapData.smoothness || 0;
-
 return (
     <g key={`swap-${sc.c}`} transform={`translate(${sc.cx}, ${sc.cy}) rotate(${totalRot}) scale(${sc.swapData.scale})`} style={{ color: shapeSolidColor }}>
         <g transform={`translate(${ox}, ${oy})`} dangerouslySetInnerHTML={{ __html: innerHtml }} />
@@ -1925,7 +1914,7 @@ return (
               </div>
 
               {/* Floating Panel for Pattern Mode Selection (only if vertical mode is off) */}
-              {selectedRow !== null && layoutMode === 'pattern' && !verticalModeOn && (
+              {selectedRow !== null && layoutMode === 'ecosystem' && !verticalModeOn && (
                 <div className="absolute bottom-6 left-6 z-20 w-80 max-h-[70vh] flex flex-col bg-white/95 backdrop-blur-md rounded-xl shadow-2xl border border-neutral-200 overflow-hidden">
                   <div className="p-4 border-b border-neutral-200 flex justify-between items-center bg-white">
                     <h3 className="text-sm font-bold text-neutral-800">Row {selectedRow + 1} Variations</h3>
@@ -1935,10 +1924,9 @@ return (
                     <div className="flex bg-neutral-100 p-1 rounded-lg border border-neutral-200 mb-4">
                       <button onClick={()=>setActiveVarTab('height')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'height' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Height</button>
                       <button onClick={()=>setActiveVarTab('length')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'length' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Length</button>
-                      <button onClick={()=>setActiveVarTab('incline')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'incline' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Incline</button>
-                      <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Left Gap</button>
+                      <button onClick={()=>setActiveVarTab('gap')} className={`flex-1 py-1.5 px-2 text-[10px] uppercase font-bold rounded ${activeVarTab === 'gap' ? 'bg-white shadow text-neutral-900' : 'text-neutral-500'}`}>Gap</button>
                     </div>
-                    {activeConf && renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, activeVarTab === 'incline' ? inclineRatio : 1, selectedRow, true)}
+                    {activeConf && renderVarSliders(activeConf.state, activeConf.setter, activeConf.min, activeConf.max, activeConf.step, activeConf.format, 1, selectedRow, true)}
                   </div>
                 </div>
               )}
